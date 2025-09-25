@@ -819,5 +819,30 @@ class LearningManager {
         
         return $stmt->fetchAll();
     }
+    
+    // Get employee requests
+    public function getEmployeeRequests($employee_id, $request_type = null) {
+        $sql = "
+            SELECT er.*, 
+                   approver.first_name as approver_first_name, approver.last_name as approver_last_name
+            FROM employee_requests er
+            LEFT JOIN users approver ON er.approved_by = approver.id
+            WHERE er.employee_id = ?
+        ";
+        
+        $params = [$employee_id];
+        
+        if ($request_type) {
+            $sql .= " AND er.request_type = ?";
+            $params[] = $request_type;
+        }
+        
+        $sql .= " ORDER BY er.created_at DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll();
+    }
 }
 

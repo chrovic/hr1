@@ -68,10 +68,16 @@
                     <i class="fe fe-book-open fe-16"></i>
                     <span class="ml-3 item-text">Learning & Training</span>
                 </a>
+                <!-- Updated: Learning Materials added -->
                 <ul class="collapse list-unstyled pl-4 w-100" id="emp_learning">
                     <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'employee_training_requests') ? 'active' : ''; ?>" href="?page=employee_training_requests">
                             <span class="ml-1 item-text">Request Training</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'employee_learning_materials') ? 'active' : ''; ?>" href="?page=employee_learning_materials">
+                            <span class="ml-1 item-text">Learning Materials</span>
                         </a>
                     </li>
                     <li class="nav-item">

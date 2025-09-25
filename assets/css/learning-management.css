@@ -1,0 +1,266 @@
+/* Learning Management Specific Styles */
+.learning-stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.learning-stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: translate(30px, -30px);
+}
+
+.learning-stats-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.learning-stats-card.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.learning-stats-card.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Course Cards */
+.course-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.course-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.course-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    margin-right: 1rem;
+}
+
+.course-avatar.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.course-avatar.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.course-avatar.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.course-avatar.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Learning Path Cards */
+.learning-path-card {
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.learning-path-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #007bff;
+    transform: translateY(-2px);
+}
+
+.learning-path-progress {
+    height: 8px;
+    border-radius: 4px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.learning-path-progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+.learning-path-progress-bar.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.learning-path-progress-bar.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.learning-path-progress-bar.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.learning-path-progress-bar.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Top Performers */
+.performer-item {
+    padding: 1rem;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.2s ease;
+}
+
+.performer-item:last-child {
+    border-bottom: none;
+}
+
+.performer-item:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.performer-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 0.75rem;
+}
+
+.performer-score {
+    font-weight: bold;
+    font-size: 0.875rem;
+}
+
+/* Activity Table */
+.activity-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.activity-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.activity-table th {
+    border: none;
+    font-weight: 500;
+    padding: 1rem;
+}
+
+.activity-table td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.activity-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.activity-table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.activity-progress {
+    width: 100px;
+    height: 6px;
+    border-radius: 3px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.activity-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+/* Modal Styles */
+.learning-modal .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: none;
+    border-radius: 0.375rem 0.375rem 0 0;
+}
+
+.learning-modal .modal-header .close {
+    color: white;
+    opacity: 0.8;
+}
+
+.learning-modal .modal-header .close:hover {
+    opacity: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .learning-stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .course-card {
+        margin-bottom: 1rem;
+    }
+    
+    .learning-path-card {
+        margin-bottom: 1rem;
+    }
+    
+    .performer-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .performer-avatar {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Animation Classes */
+.learning-fade-in {
+    animation: learningFadeIn 0.6s ease-out;
+}
+
+@keyframes learningFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.learning-slide-up {
+    animation: learningSlideUp 0.4s ease-out;
+}
+
+@keyframes learningSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

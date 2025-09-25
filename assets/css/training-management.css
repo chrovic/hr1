@@ -1,0 +1,354 @@
+/* Training Management Specific Styles */
+.training-stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.training-stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: translate(30px, -30px);
+}
+
+.training-stats-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.training-stats-card.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.training-stats-card.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Training Session Cards */
+.training-session-card {
+    border-left: 4px solid #007bff;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.training-session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.training-session-card.confirmed {
+    border-left-color: #28a745;
+}
+
+.training-session-card.pending {
+    border-left-color: #ffc107;
+}
+
+.training-session-card.scheduled {
+    border-left-color: #17a2b8;
+}
+
+.trainer-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.trainer-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 0.5rem;
+}
+
+/* Training Programs */
+.training-program-card {
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 1.5rem;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.training-program-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #007bff;
+}
+
+.program-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: #e9ecef;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.program-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.program-progress-bar.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.program-progress-bar.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.program-progress-bar.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+/* Training Resources */
+.resource-item {
+    padding: 1rem;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.2s ease;
+}
+
+.resource-item:last-child {
+    border-bottom: none;
+}
+
+.resource-item:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.resource-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1.25rem;
+}
+
+.resource-icon.primary {
+    background: rgba(0, 123, 255, 0.1);
+    color: #007bff;
+}
+
+.resource-icon.success {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+}
+
+.resource-icon.warning {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffc107;
+}
+
+/* Training Evaluations */
+.evaluation-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.evaluation-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.evaluation-table th {
+    border: none;
+    font-weight: 500;
+    padding: 1rem;
+}
+
+.evaluation-table td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.evaluation-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.evaluation-table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.star-rating {
+    display: flex;
+    align-items: center;
+}
+
+.star-rating .fe-star {
+    color: #ffc107;
+    margin-right: 2px;
+}
+
+.star-rating .fe-star.text-muted {
+    color: #6c757d;
+}
+
+/* Calendar Styles */
+.training-calendar {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.fc-toolbar {
+    margin-bottom: 1rem;
+}
+
+.fc-toolbar-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.fc-button {
+    background: #007bff;
+    border-color: #007bff;
+    border-radius: 0.375rem;
+}
+
+.fc-button:hover {
+    background: #0056b3;
+    border-color: #0056b3;
+}
+
+.fc-button:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.fc-event {
+    border-radius: 0.25rem;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.fc-event-title {
+    font-weight: 500;
+}
+
+/* Modal Styles */
+.training-modal .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: none;
+    border-radius: 0.375rem 0.375rem 0 0;
+}
+
+.training-modal .modal-header .close {
+    color: white;
+    opacity: 0.8;
+}
+
+.training-modal .modal-header .close:hover {
+    opacity: 1;
+}
+
+.training-modal .modal-body {
+    padding: 2rem;
+}
+
+.training-modal .modal-footer {
+    border-top: 1px solid #e9ecef;
+    padding: 1rem 2rem;
+}
+
+/* Form Styles */
+.training-form-group {
+    margin-bottom: 1.5rem;
+}
+
+.training-form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.training-form-control {
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.training-form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .training-stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .training-session-card {
+        padding: 1rem;
+    }
+    
+    .training-program-card {
+        margin-bottom: 1rem;
+    }
+    
+    .resource-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .resource-icon {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+    
+    .training-calendar {
+        padding: 1rem;
+    }
+}
+
+/* Animation Classes */
+.training-fade-in {
+    animation: trainingFadeIn 0.6s ease-out;
+}
+
+@keyframes trainingFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.training-slide-up {
+    animation: trainingSlideUp 0.4s ease-out;
+}
+
+@keyframes trainingSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

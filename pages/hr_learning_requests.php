@@ -5,9 +5,20 @@ require_once 'includes/functions/learning.php';
 require_once 'includes/functions/redirect_helper.php';
 
 $auth = new SimpleAuth();
-checkAuth($auth, 'view_all_data'); // Ensure only admin/HR can access
+
+// Check if user is logged in and has appropriate role
+if (!$auth->isLoggedIn()) {
+    header('Location: auth/login.php');
+    exit;
+}
 
 $current_user = $auth->getCurrentUser();
+
+// Check if user is admin or HR manager
+if ($current_user['role'] !== 'admin' && $current_user['role'] !== 'hr_manager') {
+    echo '<div class="alert alert-danger">You do not have permission to view this page.</div>';
+    exit;
+}
 $learningManager = new LearningManager();
 
 $message = '';

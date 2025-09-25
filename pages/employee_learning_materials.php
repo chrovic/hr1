@@ -27,7 +27,7 @@ if ($_POST) {
         } else {
             $requestData = [
                 'employee_id' => $current_user['id'],
-                'request_type' => 'learning_material',
+                'request_type' => 'other',
                 'title' => trim($_POST['title']),
                 'description' => trim($_POST['description']),
                 'material_type' => $_POST['material_type'],
@@ -38,24 +38,18 @@ if ($_POST) {
             
             try {
                 // Insert into employee_requests table
-                $stmt = $learningManager->db->prepare("
-                    INSERT INTO employee_requests (employee_id, request_type, title, description, request_date, status, additional_data) 
-                    VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                $db = getDB();
+                $stmt = $db->prepare("
+                    INSERT INTO employee_requests (employee_id, request_type, title, description, request_date, status) 
+                    VALUES (?, ?, ?, ?, ?, 'pending')
                 ");
-                
-                $additionalData = json_encode([
-                    'material_type' => $requestData['material_type'],
-                    'priority' => $requestData['priority'],
-                    'learning_path_id' => $requestData['learning_path_id']
-                ]);
                 
                 if ($stmt->execute([
                     $requestData['employee_id'],
                     $requestData['request_type'],
                     $requestData['title'],
                     $requestData['description'],
-                    $requestData['request_date'],
-                    $additionalData
+                    $requestData['request_date']
                 ])) {
                     $message = 'Learning material request submitted successfully!';
                     $auth->logActivity('request_learning_material', 'employee_requests', null, null, $requestData);
@@ -72,13 +66,18 @@ if ($_POST) {
 // Get available learning paths
 try {
     $learningPaths = $learningManager->getAllLearningPaths();
-    // Remove duplicates based on ID
+    // Remove duplicates based on ID and name
     $uniquePaths = [];
     $seenIds = [];
+    $seenNames = [];
     foreach ($learningPaths as $path) {
-        if (!in_array($path['id'], $seenIds)) {
+        $pathId = $path['id'];
+        $pathName = strtolower(trim($path['name']));
+        
+        if (!in_array($pathId, $seenIds) && !in_array($pathName, $seenNames)) {
             $uniquePaths[] = $path;
-            $seenIds[] = $path['id'];
+            $seenIds[] = $pathId;
+            $seenNames[] = $pathName;
         }
     }
     $learningPaths = $uniquePaths;
@@ -167,8 +166,12 @@ try {
                                         <?php 
                                         $displayedPaths = [];
                                         foreach ($learningPaths as $path): 
-                                            if (!in_array($path['id'], $displayedPaths)):
-                                                $displayedPaths[] = $path['id'];
+                                            $pathId = $path['id'];
+                                            $pathName = strtolower(trim($path['name']));
+                                            
+                                            if (!in_array($pathId, $displayedPaths) && !in_array($pathName, $displayedPaths)):
+                                                $displayedPaths[] = $pathId;
+                                                $displayedPaths[] = $pathName;
                                         ?>
                                             <div class="col-md-6 col-lg-4 mb-4 learning-path-card" 
                                                  data-name="<?php echo htmlspecialchars(strtolower($path['name'])); ?>"

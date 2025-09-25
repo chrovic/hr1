@@ -107,9 +107,15 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                     case 'my_requests':
                         include 'pages/my_requests.php';
                         break;
-                    case 'employee_learning_materials':
-                        include 'pages/employee_learning_materials.php';
-                        break;
+                        case 'employee_learning_materials':
+                            include 'pages/employee_learning_materials.php';
+                            break;
+                        case 'employee_learning_access':
+                            include 'pages/employee_learning_access.php';
+                            break;
+                        case 'hr_learning_requests':
+                            include 'pages/hr_learning_requests.php';
+                            break;
                     case 'employee_training_requests':
                         include 'pages/employee_training_requests.php';
                         break;

@@ -81,6 +81,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'employee_learning_access') ? 'active' : ''; ?>" href="?page=employee_learning_access">
+                            <span class="ml-1 item-text">My Learning Access</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'my_trainings') ? 'active' : ''; ?>" href="?page=my_trainings">
                             <span class="ml-1 item-text">My Trainings</span>
                         </a>
@@ -145,11 +150,16 @@
                             <span class="ml-1 item-text">Training Sessions</span>
                 </a>
             </li>
-            <li class="nav-item">
+                    <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'training_requests') ? 'active' : ''; ?>" href="?page=training_requests">
                             <span class="ml-1 item-text">Training Requests</span>
-                </a>
-            </li>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'hr_learning_requests') ? 'active' : ''; ?>" href="?page=hr_learning_requests">
+                            <span class="ml-1 item-text">Learning Material Requests</span>
+                        </a>
+                    </li>
             <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'training_feedback_management') ? 'active' : ''; ?>" href="?page=training_feedback_management">
                             <span class="ml-1 item-text">Training Feedback</span>
@@ -249,6 +259,11 @@
                     <li class="nav-item">
                         <a class="nav-link pl-3" href="?page=training_requests">
                             <span class="ml-1 item-text">Training Requests</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'hr_learning_requests') ? 'active' : ''; ?>" href="?page=hr_learning_requests">
+                            <span class="ml-1 item-text">Learning Material Requests</span>
                         </a>
                     </li>
                 </ul>

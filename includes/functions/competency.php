@@ -76,7 +76,7 @@ class CompetencyManager {
             
             // Decode JSON fields and map assessment method for display
             foreach ($models as &$model) {
-                $model['target_roles'] = json_decode($model['target_roles'], true) ?: [];
+                $model['target_roles'] = $model['target_roles'] ? json_decode($model['target_roles'], true) ?: [] : [];
                 $model['assessment_method_form'] = $this->mapAssessmentMethodToForm($model['assessment_method']);
                 // Set default status if column doesn't exist
                 if (!$hasStatusColumn) {

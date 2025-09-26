@@ -1,4 +1,4 @@
-<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" data-simplebar>
+cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" data-simplebar>
     <a href="#" class="btn collapseSidebar toggle-btn d-lg-none text-muted ml-2 mt-3" data-toggle="toggle">
         <i class="fe fe-x"><span class="sr-only"></span></i>
     </a>
@@ -130,6 +130,11 @@
                             <span class="ml-1 item-text">Competency Reports</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'ai_analysis_dashboard') ? 'active' : ''; ?>" href="?page=ai_analysis_dashboard">
+                            <span class="ml-1 item-text">AI Analysis Dashboard</span>
+                        </a>
+                    </li>
                 </ul>
             </li>
             
@@ -235,6 +240,11 @@
                     <li class="nav-item">
                         <a class="nav-link pl-3" href="?page=competency_reports">
                             <span class="ml-1 item-text">Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3" href="?page=ai_analysis_dashboard">
+                            <span class="ml-1 item-text">AI Analysis</span>
                         </a>
                     </li>
                 </ul>

@@ -20,6 +20,41 @@ $conn = getDB();
 $termsAcceptance = new TermsAcceptance($conn);
 $userId = $current_user['id'] ?? null;
 $termsAccepted = $userId ? $termsAcceptance->hasUserAcceptedTerms($userId) : false;
+
+// Handle evaluations form processing BEFORE any HTML output
+if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
+    require_once 'includes/functions/competency.php';
+    
+    $competencyManager = new CompetencyManager();
+    
+    $evaluationData = [
+        'cycle_id' => $_POST['cycle_id'],
+        'employee_id' => $_POST['employee_id'],
+        'evaluator_id' => $_POST['evaluator_id'],
+        'model_id' => $_POST['model_id']
+    ];
+    
+    // Check if evaluation already exists
+    $stmt = $conn->prepare("SELECT id FROM evaluations WHERE cycle_id = ? AND employee_id = ? AND evaluator_id = ? AND model_id = ?");
+    $stmt->execute([$evaluationData['cycle_id'], $evaluationData['employee_id'], $evaluationData['evaluator_id'], $evaluationData['model_id']]);
+    
+    if ($stmt->fetch()) {
+        // Set error in session and redirect
+        $_SESSION['evaluation_error'] = 'This evaluation already exists for the selected employee, cycle, and model.';
+        header('Location: ?page=evaluations');
+        exit;
+    } else {
+        if ($competencyManager->assignEvaluation($evaluationData)) {
+            $auth->logActivity('assign_evaluation', 'evaluations', null, null, $evaluationData);
+            header('Location: ?page=evaluations&success=1');
+            exit;
+        } else {
+            $_SESSION['evaluation_error'] = 'Failed to assign evaluation.';
+            header('Location: ?page=evaluations');
+            exit;
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -104,6 +139,9 @@ $termsAccepted = $userId ? $termsAcceptance->hasUserAcceptedTerms($userId) : fal
                         break;
                     case 'competency_reports':
                         include 'pages/competency_reports.php';
+                        break;
+                    case 'ai_analysis_dashboard':
+                        include 'pages/ai_analysis_dashboard.php';
                         break;
                     case 'my_evaluations':
                         include 'pages/my_evaluations.php';

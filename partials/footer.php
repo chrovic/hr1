@@ -4,7 +4,7 @@
             <div class="col-12 text-center">
                 <div class="py-3">
                     <div class="small mb-2">
-                        <span>&copy; <?php echo date('Y'); ?> HR1 Human Resources Management System. All rights reserved.</span>
+                        <span>&copy; <?php echo date('Y'); ?> HR2 Human Resources Management System. All rights reserved.</span>
                     </div>
                     <div class="small">
                         <a href="#" data-toggle="modal" data-target="#termsModal">
@@ -33,7 +33,7 @@
             </div>
             <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
                 <div class="terms-content">
-                    <h6 class="text-primary mb-3">HR1 Human Resources Management System - Terms and Conditions</h6>
+                    <h6 class="text-primary mb-3">HR2 Human Resources Management System - Terms and Conditions</h6>
                     
                     <p class="text-muted small mb-4">
                         <strong>Effective Date:</strong> <?php echo date('F d, Y'); ?><br>
@@ -43,7 +43,7 @@
                     <div class="mb-4">
                         <h6 class="text-dark">1. Acceptance of Terms</h6>
                         <p class="text-justify small">
-                            By accessing and using the HR1 Human Resources Management System, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. These terms are governed by the laws of the Republic of the Philippines and are subject to the provisions of Republic Act No. 10173 (Data Privacy Act of 2012), Republic Act No. 10175 (Cybercrime Prevention Act of 2012), and other applicable Philippine laws.
+                            By accessing and using the HR2 Human Resources Management System, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. These terms are governed by the laws of the Republic of the Philippines and are subject to the provisions of Republic Act No. 10173 (Data Privacy Act of 2012), Republic Act No. 10175 (Cybercrime Prevention Act of 2012), and other applicable Philippine laws.
                         </p>
                     </div>
 
@@ -149,7 +149,7 @@
             </div>
             <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
                 <div class="privacy-content">
-                    <h6 class="text-primary mb-3">HR1 Human Resources Management System - Privacy Policy</h6>
+                    <h6 class="text-primary mb-3">HR2 Human Resources Management System - Privacy Policy</h6>
                     
                     <p class="text-muted small mb-4">
                         <strong>Effective Date:</strong> <?php echo date('F d, Y'); ?><br>

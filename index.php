@@ -61,10 +61,10 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="HR1 - Human Resources Management System">
+    <meta name="description" content="HR2 - Human Resources Management System">
     <meta name="author" content="">
     <link rel="icon" href="assets/images/favicon.ico">
-    <title>HR1 - Human Resources Management System</title>
+    <title>HR2 - Human Resources Management System</title>
     <!-- Simple bar CSS -->
     <link rel="stylesheet" href="assets/vendor/css/simplebar.css">
     <!-- Fonts CSS -->
@@ -82,7 +82,7 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
     <!-- App CSS -->
     <link rel="stylesheet" href="assets/vendor/css/app-light.css" id="lightTheme">
     <link rel="stylesheet" href="assets/vendor/css/app-dark.css" id="darkTheme" disabled>
-    <!-- HR1 Custom CSS -->
+    <!-- HR2 Custom CSS -->
     <link rel="stylesheet" href="assets/css/hr-main.css">
 </head>
 <body class="vertical light">
@@ -236,16 +236,16 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
                 <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
                     <div class="alert alert-warning">
                         <i class="fe fe-alert-triangle mr-2"></i>
-                        <strong>Important:</strong> You must accept our Terms and Conditions to continue using the HR1 system.
+                        <strong>Important:</strong> You must accept our Terms and Conditions to continue using the HR2 system.
                     </div>
                     
                     <div class="terms-summary">
-                        <h6 class="text-primary mb-3">HR1 Human Resources Management System - Terms and Conditions</h6>
+                        <h6 class="text-primary mb-3">HR2 Human Resources Management System - Terms and Conditions</h6>
                         
                         <div class="mb-3">
                             <h6 class="text-dark">1. Acceptance of Terms</h6>
                             <p class="text-justify small">
-                                By accessing and using the HR1 Human Resources Management System, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. These terms are governed by the laws of the Republic of the Philippines and are subject to the provisions of Republic Act No. 10173 (Data Privacy Act of 2012), Republic Act No. 10175 (Cybercrime Prevention Act of 2012), and other applicable Philippine laws.
+                                By accessing and using the HR2 Human Resources Management System, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions. These terms are governed by the laws of the Republic of the Philippines and are subject to the provisions of Republic Act No. 10173 (Data Privacy Act of 2012), Republic Act No. 10175 (Cybercrime Prevention Act of 2012), and other applicable Philippine laws.
                             </p>
                         </div>
 
@@ -298,7 +298,7 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
     <script src="assets/vendor/js/simplebar.min.js"></script>
     <script src="assets/vendor/js/config.js"></script>
     <script src="assets/vendor/js/apps.js"></script>
-    <!-- HR1 Custom JavaScript -->
+    <!-- HR2 Custom JavaScript -->
     <script src="assets/js/hr-main.js"></script>
     
     <!-- Terms Acceptance JavaScript -->

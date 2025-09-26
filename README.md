@@ -1,4 +1,4 @@
-# HR1 Human Resources Management System
+# HR2 Human Resources Management System
 
 A comprehensive HR management system built with PHP, MySQL, and Bootstrap.
 
@@ -6,7 +6,7 @@ A comprehensive HR management system built with PHP, MySQL, and Bootstrap.
 
 1. **Database Setup:**
    ```bash
-   mysql -u root < database/HR1_Complete_Schema.sql
+   mysql -u root < database/HR2_Complete_Schema.sql
    ```
 
 2. **Access the System:**
@@ -51,8 +51,8 @@ hr1/
 
 ## 📚 Documentation
 
-- [Complete Database Schema](docs/HR1_Final_Database_Schema.md)
-- [System Analysis](docs/HR1_System_Analysis.md)
+- [Complete Database Schema](docs/HR2_Final_Database_Schema.md)
+- [System Analysis](docs/HR2_System_Analysis.md)
 - [Implementation Guide](docs/Implementation_Guide.md)
 
 ## 🗄️ Database
@@ -64,7 +64,7 @@ The system uses a comprehensive database schema with 16 tables covering:
 - Succession planning
 - System administration and logging
 
-See `database/HR1_Complete_Schema.sql` for the complete schema.
+See `database/HR2_Complete_Schema.sql` for the complete schema.
 
 ## 🔐 Security Features
 

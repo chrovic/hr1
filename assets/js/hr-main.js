@@ -1,4 +1,4 @@
-// HR1 Main JavaScript Functions
+// HR2 Main JavaScript Functions
 class HRSystem {
     constructor() {
         this.init();

@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="HR1 - Two-Factor Authentication">
+    <meta name="description" content="HR2 - Two-Factor Authentication">
     <meta name="author" content="">
     <link rel="icon" href="../assets/images/favicon.ico">
-    <title>HR1 - Two-Factor Authentication</title>
+    <title>HR2 - Two-Factor Authentication</title>
     <!-- Vendor CSS -->
     <link rel="stylesheet" href="../assets/vendor/css/simplebar.css">
     <link rel="stylesheet" href="../assets/vendor/css/feather.css">

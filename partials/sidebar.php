@@ -13,7 +13,7 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                         <polygon class="st0" points="78,33 15,33 24,15 87,15 	" />
                     </g>
                 </svg>
-                <span class="text-primary font-weight-bold">HR1</span>
+                <span class="text-primary font-weight-bold">HR2</span>
             </a>
         </div>
         <ul class="navbar-nav flex-fill w-100 mb-2">

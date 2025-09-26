@@ -32,7 +32,7 @@ $userRole = $auth->getUserRole();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Test - HR1 System</title>
+    <title>Login Test - HR2 System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -41,7 +41,7 @@ $userRole = $auth->getUserRole();
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h3>HR1 System - Login Test</h3>
+                        <h3>HR2 System - Login Test</h3>
                     </div>
                     <div class="card-body">
                         <?php if ($message): ?>

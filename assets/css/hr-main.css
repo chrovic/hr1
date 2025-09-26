@@ -434,3 +434,90 @@
 .shadow-hover:hover {
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
+
+/* Footer Styles */
+.footer {
+    margin-top: auto;
+    border-top: 2px solid #dee2e6;
+    background-color: #ffffff;
+    font-size: 0.875rem;
+    width: 100%;
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.footer .container-fluid {
+    padding: 1.5rem 0;
+    max-width: 100%;
+}
+
+.footer .row {
+    margin: 0;
+}
+
+.footer .col-12 {
+    padding: 0;
+}
+
+.footer .text-muted {
+    color: #495057 !important;
+    font-weight: 500;
+}
+
+.footer a {
+    color: #007bff !important;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.footer a:hover {
+    color: #0056b3 !important;
+    background-color: rgba(0, 123, 255, 0.1);
+    text-decoration: none;
+}
+
+.footer .mx-2 {
+    color: #6c757d;
+    font-weight: 600;
+}
+
+/* Terms and Conditions Modal Styles */
+#termsModal .modal-body,
+#privacyModal .modal-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.terms-content h6,
+.privacy-content h6 {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--dark-color);
+}
+
+.terms-content ul,
+.privacy-content ul {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.terms-content li,
+.privacy-content li {
+    margin-bottom: 0.25rem;
+}
+
+.terms-content .alert,
+.privacy-content .alert {
+    font-size: 0.85rem;
+    padding: 0.75rem;
+    margin-top: 1rem;
+}
+
+/* Responsive Footer */
+@media (max-width: 768px) {
+    .footer .mx-2 {
+        display: none;
+    }
+}

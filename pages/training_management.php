@@ -18,115 +18,26 @@ $db = getDB();
 $message = '';
 $error = '';
 
-// Handle feedback submission
-if ($_POST && isset($_POST['submit_feedback'])) {
-    $enrollmentId = $_POST['enrollment_id'];
-    $score = $_POST['score'];
-    $feedback = $_POST['feedback'];
-    $completionStatus = $_POST['completion_status'];
-    
-    try {
-        $stmt = $db->prepare("
-            UPDATE training_enrollments 
-            SET score = ?, feedback = ?, completion_status = ?, completion_date = NOW(), updated_at = NOW()
-            WHERE id = ?
-        ");
-        
-        if ($stmt->execute([$score, $feedback, $completionStatus, $enrollmentId])) {
-            $message = 'Feedback and score submitted successfully!';
-            $auth->logActivity('submit_training_feedback', 'training_enrollments', $enrollmentId, null, [
-                'score' => $score,
-                'completion_status' => $completionStatus
-            ]);
-        } else {
-            $error = 'Failed to submit feedback.';
-        }
-    } catch (PDOException $e) {
-        $error = 'Database error: ' . $e->getMessage();
-    }
-}
+// Form processing is now handled in index.php before any output
 
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['create_session'])) {
-        $sessionData = [
-            'training_id' => $_POST['training_id'],
-            'session_name' => $_POST['session_name'],
-            'session_date' => $_POST['session_date'],
-            'start_time' => $_POST['start_time'],
-            'end_time' => $_POST['end_time'],
-            'location' => $_POST['location'],
-            'max_participants' => $_POST['max_participants'],
-            'status' => $_POST['status'],
-            'created_by' => $current_user['id']
-        ];
-        
-        if ($learningManager->scheduleSession($sessionData)) {
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+    switch ($_GET['success']) {
+        case 'feedback_submitted':
+            $message = 'Feedback and score submitted successfully!';
+            break;
+        case 'session_created':
             $message = 'Training session created successfully!';
-            $auth->logActivity('create_session', 'training_sessions', null, null, $sessionData);
-        } else {
-            $error = 'Failed to create training session.';
-        }
-    }
-    
-    if (isset($_POST['enroll_employee'])) {
-        $enrollmentData = [
-            'session_id' => $_POST['session_id'],
-            'employee_id' => $_POST['employee_id'],
-            'enrollment_date' => date('Y-m-d'),
-            'attendance_status' => 'enrolled',
-            'completion_status' => 'not_started'
-        ];
-        
-        if ($learningManager->enrollEmployee($enrollmentData)) {
+            break;
+        case 'employee_enrolled':
             $message = 'Employee enrolled successfully!';
-            $auth->logActivity('enroll_employee', 'training_enrollments', null, null, $enrollmentData);
-        } else {
-            $error = 'Failed to enroll employee.';
-        }
-    }
-    
-    if (isset($_POST['update_session'])) {
-        $sessionId = $_POST['edit_session_id'];
-        $updateData = [
-            'module_id' => $_POST['edit_training_id'],
-            'session_name' => $_POST['edit_session_name'],
-            'description' => $_POST['edit_description'],
-            'start_date' => $_POST['edit_start_date'],
-            'end_date' => $_POST['edit_end_date'],
-            'location' => $_POST['edit_location'],
-            'max_participants' => $_POST['edit_max_participants'],
-            'status' => $_POST['edit_status']
-        ];
-        
-        try {
-            $stmt = $db->prepare("
-                UPDATE training_sessions 
-                SET module_id = ?, session_name = ?, description = ?, 
-                    start_date = ?, end_date = ?, location = ?, 
-                    max_participants = ?, status = ?
-                WHERE id = ?
-            ");
-            
-            if ($stmt->execute([
-                $updateData['module_id'],
-                $updateData['session_name'],
-                $updateData['description'],
-                $updateData['start_date'],
-                $updateData['end_date'],
-                $updateData['location'],
-                $updateData['max_participants'],
-                $updateData['status'],
-                $sessionId
-            ])) {
-                $message = 'Training session updated successfully!';
-                $auth->logActivity('update_session', 'training_sessions', $sessionId, null, $updateData);
-            } else {
-                $error = 'Failed to update training session.';
-            }
-        } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
-        }
+            break;
+        case 'session_updated':
+            $message = 'Training session updated successfully!';
+            break;
+        case 'session_deleted':
+            $message = 'Training session deleted successfully!';
+            break;
     }
 }
 
@@ -344,9 +255,9 @@ try {
                                                     <button class="btn btn-sm btn-outline-success" onclick="manageEnrollments(<?php echo $session['id']; ?>)">
                                                         <i class="fe fe-users fe-14"></i>
                                                     </button>
-                                                    <a href="?page=training_feedback_management" class="btn btn-sm btn-outline-warning" title="Give Feedback">
+                                                    <button class="btn btn-sm btn-outline-warning" onclick="openSessionFeedbackModal(<?php echo $session['id']; ?>)" title="Give Feedback & Status">
                                                         <i class="fe fe-star fe-14"></i>
-                                                    </a>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -503,13 +414,42 @@ try {
                                 <input type="text" class="form-control" name="location" id="location" placeholder="Conference Room A">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="trainer_id">Trainer/Manager</label>
+                                <select class="form-control" name="trainer_id" id="trainer_id" required>
+                                    <option value="">Select Trainer/Manager</option>
+                                    <?php
+                                    // Get all users who can be trainers (HR managers, supervisors, or trainers)
+                                    try {
+                                        $stmt = $db->prepare("SELECT id, first_name, last_name, email, role FROM users WHERE role IN ('hr_manager', 'supervisor', 'trainer') OR id = ? ORDER BY first_name, last_name");
+                                        $stmt->execute([$current_user['id']]);
+                                        $trainers = $stmt->fetchAll();
+                                        foreach ($trainers as $trainer):
+                                    ?>
+                                        <option value="<?php echo $trainer['id']; ?>">
+                                            <?php echo htmlspecialchars($trainer['first_name'] . ' ' . $trainer['last_name']); ?>
+                                            (<?php echo htmlspecialchars($trainer['role']); ?>)
+                                        </option>
+                                    <?php 
+                                        endforeach;
+                                    } catch (PDOException $e) {
+                                        // Handle error silently
+                                    }
+                                    ?>
+                                </select>
+                                <small class="form-text text-muted">The trainer/manager will be responsible for giving feedback to participants</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label for="max_participants">Max Participants</label>
                                 <input type="number" class="form-control" name="max_participants" id="max_participants" value="20" min="1">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label for="status">Status</label>
                                 <select class="form-control" name="status" id="status">
@@ -544,16 +484,13 @@ try {
             <form method="POST">
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="session_id">Training Session</label>
-                        <select class="form-control" name="session_id" id="session_id" required>
-                            <option value="">Select Session</option>
-                            <?php foreach ($sessions as $session): ?>
-                                <option value="<?php echo $session['id']; ?>">
-                                    <?php echo htmlspecialchars($session['training_title'] ?? 'Untitled'); ?> - 
-                                    <?php echo date('M d, Y', strtotime($session['start_date'])); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label for="enroll_session_id">Training Session</label>
+                        <input type="hidden" name="session_id" id="enroll_session_id" required>
+                        <div class="form-control-plaintext" id="enroll_session_display">
+                            <i class="fe fe-calendar fe-16 mr-2"></i>
+                            <span id="enroll_session_title">Select a session first</span>
+                        </div>
+                        <small class="form-text text-muted">Session is automatically selected based on your action</small>
                     </div>
                     <div class="form-group">
                         <label for="employee_id">Employee</label>
@@ -786,13 +723,42 @@ try {
                                 <input type="text" class="form-control" name="edit_location" id="edit_location" placeholder="Conference Room A">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_trainer_id">Trainer/Manager</label>
+                                <select class="form-control" name="edit_trainer_id" id="edit_trainer_id" required>
+                                    <option value="">Select Trainer/Manager</option>
+                                    <?php
+                                    // Get all users who can be trainers (HR managers, supervisors, or trainers)
+                                    try {
+                                        $stmt = $db->prepare("SELECT id, first_name, last_name, email, role FROM users WHERE role IN ('hr_manager', 'supervisor', 'trainer') OR id = ? ORDER BY first_name, last_name");
+                                        $stmt->execute([$current_user['id']]);
+                                        $trainers = $stmt->fetchAll();
+                                        foreach ($trainers as $trainer):
+                                    ?>
+                                        <option value="<?php echo $trainer['id']; ?>">
+                                            <?php echo htmlspecialchars($trainer['first_name'] . ' ' . $trainer['last_name']); ?>
+                                            (<?php echo htmlspecialchars($trainer['role']); ?>)
+                                        </option>
+                                    <?php 
+                                        endforeach;
+                                    } catch (PDOException $e) {
+                                        // Handle error silently
+                                    }
+                                    ?>
+                                </select>
+                                <small class="form-text text-muted">The trainer/manager will be responsible for giving feedback to participants</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label for="edit_max_participants">Max Participants</label>
                                 <input type="number" class="form-control" name="edit_max_participants" id="edit_max_participants" min="1">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <div class="form-group">
                                 <label for="edit_status">Status</label>
                                 <select class="form-control" name="edit_status" id="edit_status">
@@ -830,11 +796,11 @@ try {
                         <h6 class="text-muted">Session: <span id="enrollment_session_title"></span></h6>
                         <small class="text-muted">Date: <span id="enrollment_session_date"></span></small>
                     </div>
-                    <div class="col-md-4 text-right">
-                        <button class="btn btn-primary" onclick="openEnrollEmployeeModal()">
-                            <i class="fe fe-plus fe-14 mr-1"></i>Enroll Employee
-                        </button>
-                    </div>
+                                    <div class="col-md-4 text-right">
+                                        <button class="btn btn-primary" onclick="openEnrollEmployeeModal(window.currentSessionId)">
+                                            <i class="fe fe-plus fe-14 mr-1"></i>Enroll Employee
+                                        </button>
+                                    </div>
                 </div>
                 
                 <div class="table-responsive">
@@ -954,6 +920,7 @@ function editSession(sessionId) {
             document.getElementById('edit_start_date').value = startDateTime;
             document.getElementById('edit_end_date').value = endDateTime;
             document.getElementById('edit_location').value = session.location || '';
+            document.getElementById('edit_trainer_id').value = session.trainer_id || '';
             document.getElementById('edit_max_participants').value = session.max_participants || '';
             document.getElementById('edit_status').value = session.status || 'scheduled';
             
@@ -1150,12 +1117,61 @@ function manageEnrollments(sessionId) {
     });
 }
 
-function openEnrollEmployeeModal() {
-    // Close manage enrollments modal and open enroll employee modal
-    $('#manageEnrollmentsModal').modal('hide');
+function manageEnrollmentsFromFeedback(sessionId) {
+    // Close the session feedback modal first
+    $('#sessionFeedbackModal').modal('hide');
+    
+    // Then open the manage enrollments modal
     setTimeout(() => {
-        $('#enrollEmployeeModal').modal('show');
+        manageEnrollments(sessionId);
     }, 300);
+}
+
+function openEnrollEmployeeModal(sessionId = null) {
+    // If sessionId is provided, populate the session info
+    if (sessionId) {
+        // Close any open modals first
+        $('#manageEnrollmentsModal').modal('hide');
+        $('#sessionFeedbackModal').modal('hide');
+        
+        // Fetch session details to populate the form
+        fetch('includes/ajax/ajax_get_session_details.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'session_id=' + sessionId
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const session = data.session;
+                
+                // Set the session ID
+                document.getElementById('enroll_session_id').value = sessionId;
+                
+                // Display session information
+                const sessionTitle = session.training_title || 'Training Session';
+                const sessionDate = new Date(session.start_date).toLocaleDateString();
+                document.getElementById('enroll_session_title').textContent = `${sessionTitle} - ${sessionDate}`;
+                
+                // Show the modal after a short delay to ensure other modals are closed
+                setTimeout(() => {
+                    $('#enrollEmployeeModal').modal('show');
+                }, 300);
+            } else {
+                alert('Failed to load session details: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to load session details. Please try again.');
+        });
+    } else {
+        // Close manage enrollments modal and open enroll employee modal
+        $('#manageEnrollmentsModal').modal('hide');
+        setTimeout(() => {
+            $('#enrollEmployeeModal').modal('show');
+        }, 300);
+    }
 }
 
 function viewEnrollmentDetails(enrollmentId) {
@@ -1164,6 +1180,10 @@ function viewEnrollmentDetails(enrollmentId) {
 }
 
 function openFeedbackModal(enrollmentId) {
+    // Close any open parent modals first
+    $('#sessionFeedbackModal').modal('hide');
+    $('#manageEnrollmentsModal').modal('hide');
+    
     // Fetch enrollment details
     fetch('includes/ajax/ajax_get_enrollment_details.php', {
         method: 'POST',
@@ -1186,8 +1206,10 @@ function openFeedbackModal(enrollmentId) {
             document.getElementById('feedback_completion_status').value = enrollment.completion_status || 'completed';
             document.getElementById('feedback_text').value = enrollment.feedback || '';
             
-            // Show modal
-            $('#feedbackModal').modal('show');
+            // Show modal after a short delay to ensure parent modals are closed
+            setTimeout(() => {
+                $('#feedbackModal').modal('show');
+            }, 300);
         } else {
             alert('Failed to load enrollment details: ' + (data.message || 'Unknown error'));
         }
@@ -1224,7 +1246,150 @@ function removeEnrollment(enrollmentId) {
     }
 }
 
+function openSessionFeedbackModal(sessionId) {
+    // Fetch session details and enrollments to show feedback options
+    Promise.all([
+        fetch('includes/ajax/ajax_get_session_details.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'session_id=' + sessionId
+        }).then(response => response.json()),
+        fetch('includes/ajax/ajax_get_session_enrollments.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'session_id=' + sessionId
+        }).then(response => response.json())
+    ])
+    .then(([sessionData, enrollmentsData]) => {
+        if (sessionData.success && enrollmentsData.success) {
+            const session = sessionData.session;
+            const enrollments = enrollmentsData.enrollments;
+            
+            // Create a session feedback modal content
+            const modalContent = `
+                <div class="modal fade" id="sessionFeedbackModal" tabindex="-1" role="dialog">
+                    <div class="modal-dialog modal-xl" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Session Feedback & Status Management</h5>
+                                <button type="button" class="close" data-dismiss="modal">
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-8">
+                                        <h6 class="text-muted">Session: <strong>${session.training_title || 'Training Session'}</strong></h6>
+                                        <small class="text-muted">Date: ${new Date(session.start_date).toLocaleDateString()}</small>
+                                    </div>
+                                    <div class="col-md-4 text-right">
+                                        <button class="btn btn-primary" onclick="manageEnrollmentsFromFeedback(${sessionId})">
+                                            <i class="fe fe-users fe-14 mr-1"></i>Manage Participants
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Employee</th>
+                                                <th>Email</th>
+                                                <th>Status</th>
+                                                <th>Score</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${enrollments.length === 0 ? `
+                                                <tr>
+                                                    <td colspan="5" class="text-center text-muted py-4">
+                                                        <i class="fe fe-users fe-48 mb-3"></i>
+                                                        <h4 class="text-muted">No Participants</h4>
+                                                        <p class="text-muted">No employees are enrolled in this session yet.</p>
+                                                        <button class="btn btn-primary" onclick="openEnrollEmployeeModal(window.currentSessionId)">
+                                                            <i class="fe fe-plus fe-14 mr-1"></i>Add Participants
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ` : enrollments.map(enrollment => `
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="avatar avatar-sm mr-2">
+                                                                <span class="avatar-title bg-primary rounded-circle">
+                                                                    ${(enrollment.employee_first_name || 'E').charAt(0).toUpperCase()}${(enrollment.employee_last_name || 'M').charAt(0).toUpperCase()}
+                                                                </span>
+                                                            </div>
+                                                            <span>${enrollment.employee_first_name || 'Unknown'} ${enrollment.employee_last_name || 'Employee'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>${enrollment.employee_email || 'N/A'}</td>
+                                                    <td>
+                                                        <span class="badge badge-${enrollment.status === 'completed' ? 'success' : enrollment.status === 'enrolled' ? 'info' : 'warning'}">
+                                                            ${enrollment.status || 'Unknown'}
+                                                        </span>
+                                                    </td>
+                                                    <td>${enrollment.score ? enrollment.score + '%' : 'N/A'}</td>
+                                                    <td>
+                                                        <div class="btn-group" role="group">
+                                                            <button class="btn btn-sm btn-outline-warning" onclick="openFeedbackModal(${enrollment.id})" title="Give Feedback & Score">
+                                                                <i class="fe fe-star fe-14"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-outline-info" onclick="viewFeedback(${enrollment.id})" title="View Details">
+                                                                <i class="fe fe-eye fe-14"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById('sessionFeedbackModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Add modal to body
+            document.body.insertAdjacentHTML('beforeend', modalContent);
+            
+            // Store current session ID for enrollment actions
+            window.currentSessionId = sessionId;
+            
+            // Show modal
+            $('#sessionFeedbackModal').modal('show');
+            
+            // Clean up modal when closed
+            $('#sessionFeedbackModal').on('hidden.bs.modal', function() {
+                $(this).remove();
+            });
+            
+        } else {
+            alert('Failed to load session data: ' + (sessionData.message || enrollmentsData.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to load session data. Please try again.');
+    });
+}
+
 function viewFeedback(enrollmentId) {
+    // Close any open parent modals first
+    $('#sessionFeedbackModal').modal('hide');
+    $('#manageEnrollmentsModal').modal('hide');
+    
     // Fetch enrollment/feedback details via AJAX
     fetch('includes/ajax/ajax_get_enrollment_details.php', {
         method: 'POST',
@@ -1280,8 +1445,7 @@ function viewFeedback(enrollmentId) {
                 scoreBar.className = 'progress-bar bg-danger';
             }
             
-            // Close manage enrollments modal if it's open, then show feedback modal
-            $('#manageEnrollmentsModal').modal('hide');
+            // Show feedback modal after a short delay to ensure parent modals are closed
             setTimeout(() => {
                 $('#viewFeedbackModal').modal('show');
             }, 300);

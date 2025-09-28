@@ -1,5 +1,5 @@
 <?php
-require_once '../data/db.php';
+require_once __DIR__ . '/../data/db.php';
 
 // Prevent direct access
 if (!isset($_POST['enrollment_id'])) {
@@ -30,6 +30,9 @@ try {
     echo json_encode(['success' => false, 'message' => 'An error occurred']);
 }
 ?>
+
+
+
 
 
 

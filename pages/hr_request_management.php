@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/data/db.php';
+
 require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/request_manager.php';
 

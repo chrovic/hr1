@@ -4,8 +4,6 @@ require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/competency.php';
 require_once 'includes/data/competency_templates.php';
 
-// AJAX handling moved to standalone endpoint: ajax/get_model_details.php
-
 // Regular authentication check for non-AJAX requests
 $auth = new SimpleAuth();
 if (!$auth->isLoggedIn() || !$auth->hasPermission('manage_evaluations')) {
@@ -17,102 +15,33 @@ $current_user = $auth->getCurrentUser();
 $competencyManager = new CompetencyManager();
 $db = getDB();
 
+// Form processing is now handled in index.php before any output
+
+// Initialize variables after form processing
 $message = '';
 $error = '';
 
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['create_model'])) {
-        $modelData = [
-            'name' => $_POST['name'],
-            'description' => $_POST['description'],
-            'category' => $_POST['category'],
-            'target_roles' => explode(',', $_POST['target_roles']),
-            'assessment_method' => $_POST['assessment_method'],
-            'created_by' => $current_user['id']
-        ];
-        
-        if ($competencyManager->createModel($modelData)) {
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+    switch ($_GET['success']) {
+        case 'model_created':
             $message = 'Competency model created successfully!';
-            $auth->logActivity('create_competency_model', 'competency_models', null, null, $modelData);
-        } else {
-            $error = 'Failed to create competency model.';
-        }
-    }
-    
-    if (isset($_POST['add_competency'])) {
-        $competencyData = [
-            'model_id' => $_POST['model_id'],
-            'name' => $_POST['competency_name'],
-            'description' => $_POST['competency_description'],
-            'weight' => $_POST['weight'],
-            'max_score' => $_POST['max_score']
-        ];
-        
-        if ($competencyManager->addCompetency($competencyData)) {
-            $message = 'Competency added successfully!';
-            $auth->logActivity('add_competency', 'competencies', null, null, $competencyData);
-        } else {
-            $error = 'Failed to add competency.';
-        }
-    }
-    
-    if (isset($_POST['update_model'])) {
-        $modelId = $_POST['model_id'];
-        $updateData = [
-            'name' => $_POST['name'],
-            'description' => $_POST['description'],
-            'category' => $_POST['category'],
-            'target_roles' => explode(',', $_POST['target_roles']),
-            'assessment_method' => $_POST['assessment_method'],
-            'status' => $_POST['status']
-        ];
-        
-        if ($competencyManager->updateModel($modelId, $updateData)) {
+            break;
+        case 'model_updated':
             $message = 'Competency model updated successfully!';
-            $auth->logActivity('update_competency_model', 'competency_models', $modelId, null, $updateData);
-        } else {
-            $error = 'Failed to update competency model.';
-        }
-    }
-    
-    if (isset($_POST['delete_model'])) {
-        $modelId = $_POST['model_id'];
-        
-        if ($competencyManager->deleteModel($modelId)) {
+            break;
+        case 'model_deleted':
             $message = 'Competency model deleted successfully!';
-            $auth->logActivity('delete_competency_model', 'competency_models', $modelId, null, null);
-        } else {
-            $error = 'Failed to delete competency model.';
-        }
-    }
-    
-    if (isset($_POST['update_competency'])) {
-        $competencyId = $_POST['competency_id'];
-        $updateData = [
-            'name' => $_POST['competency_name'],
-            'description' => $_POST['competency_description'],
-            'weight' => $_POST['weight'],
-            'max_score' => $_POST['max_score']
-        ];
-        
-        if ($competencyManager->updateCompetency($competencyId, $updateData)) {
+            break;
+        case 'competency_added':
+            $message = 'Competency added successfully!';
+            break;
+        case 'competency_updated':
             $message = 'Competency updated successfully!';
-            $auth->logActivity('update_competency', 'competencies', $competencyId, null, $updateData);
-        } else {
-            $error = 'Failed to update competency.';
-        }
-    }
-    
-    if (isset($_POST['delete_competency'])) {
-        $competencyId = $_POST['competency_id'];
-        
-        if ($competencyManager->deleteCompetency($competencyId)) {
+            break;
+        case 'competency_deleted':
             $message = 'Competency deleted successfully!';
-            $auth->logActivity('delete_competency', 'competencies', $competencyId, null, null);
-        } else {
-            $error = 'Failed to delete competency.';
-        }
+            break;
     }
 }
 

@@ -2,9 +2,12 @@
 // Competency Management System
 class CompetencyManager {
     private $db;
+    private $notificationManager;
     
     public function __construct() {
         $this->db = getDB();
+        require_once 'notification_manager.php';
+        $this->notificationManager = new NotificationManager();
     }
     
     // Helper method to map database assessment method values to form values
@@ -38,7 +41,7 @@ class CompetencyManager {
         
         $stmt = $this->db->prepare("INSERT INTO competency_models (name, description, category, target_roles, assessment_method, created_by) VALUES (?, ?, ?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $modelData['name'],
             $modelData['description'],
             $modelData['category'],
@@ -46,6 +49,32 @@ class CompetencyManager {
             $assessmentMethod,
             $modelData['created_by']
         ]);
+        
+        if ($result) {
+            $modelId = $this->db->lastInsertId();
+            
+            // Get creator name for notification
+            $creatorStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+            $creatorStmt->execute([$modelData['created_by']]);
+            $creator = $creatorStmt->fetch();
+            $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'Unknown';
+            
+            // Notify HR managers and admins
+            $this->notificationManager->notifyHRManagers(
+                'model_created',
+                [
+                    'model_name' => $modelData['name'],
+                    'created_by' => $creatorName,
+                    'category' => $modelData['category']
+                ],
+                $modelId,
+                'model',
+                '?page=competency_models&action=view&id=' . $modelId,
+                true
+            );
+        }
+        
+        return $result;
     }
     
     // Get all competency models
@@ -95,17 +124,42 @@ class CompetencyManager {
     public function addCompetency($competencyData) {
         $stmt = $this->db->prepare("INSERT INTO competencies (model_id, name, description, weight, max_score) VALUES (?, ?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $competencyData['model_id'],
             $competencyData['name'],
             $competencyData['description'],
             $competencyData['weight'],
             $competencyData['max_score']
         ]);
+        
+        if ($result) {
+            $competencyId = $this->db->lastInsertId();
+            
+            // Get model name for notification
+            $modelStmt = $this->db->prepare("SELECT name FROM competency_models WHERE id = ?");
+            $modelStmt->execute([$competencyData['model_id']]);
+            $model = $modelStmt->fetch();
+            $modelName = $model ? $model['name'] : 'Unknown Model';
+            
+            // Notify HR managers and admins
+            $this->notificationManager->notifyHRManagers(
+                'competency_added',
+                [
+                    'competency_name' => $competencyData['name'],
+                    'model_name' => $modelName
+                ],
+                $competencyId,
+                'competency',
+                '?page=competency_models&action=view&id=' . $competencyData['model_id'],
+                false
+            );
+        }
+        
+        return $result;
     }
     
     // Update competency model
-    public function updateModel($modelId, $updateData) {
+    public function updateModel($modelId, $updateData, $updatedBy = null) {
         try {
             $assessmentMethod = $this->mapAssessmentMethodToDb($updateData['assessment_method']);
             
@@ -141,7 +195,38 @@ class CompetencyManager {
             
             $stmt = $this->db->prepare("UPDATE competency_models SET $updateFields WHERE id = ?");
             
-            return $stmt->execute($params);
+            $result = $stmt->execute($params);
+            
+            if ($result) {
+                // Get model name for notification
+                $modelStmt = $this->db->prepare("SELECT name FROM competency_models WHERE id = ?");
+                $modelStmt->execute([$modelId]);
+                $model = $modelStmt->fetch();
+                $modelName = $model ? $model['name'] : 'Unknown Model';
+                
+                // Use provided user info or get from session
+                if (!$updatedBy) {
+                    $userStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                    $userStmt->execute([$_SESSION['user_id'] ?? 1]);
+                    $user = $userStmt->fetch();
+                    $updatedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
+                }
+                
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    'model_updated',
+                    [
+                        'model_name' => $modelName,
+                        'updated_by' => $updatedBy
+                    ],
+                    $modelId,
+                    'model',
+                    '?page=competency_models&action=view&id=' . $modelId,
+                    false
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error updating competency model: " . $e->getMessage());
             return false;
@@ -151,6 +236,12 @@ class CompetencyManager {
     // Delete competency model (soft delete)
     public function deleteModel($modelId) {
         try {
+            // Get model name before deletion for notification
+            $modelStmt = $this->db->prepare("SELECT name FROM competency_models WHERE id = ?");
+            $modelStmt->execute([$modelId]);
+            $model = $modelStmt->fetch();
+            $modelName = $model ? $model['name'] : 'Unknown Model';
+            
             // Check if status column exists
             $checkStmt = $this->db->prepare("SHOW COLUMNS FROM competency_models LIKE 'status'");
             $checkStmt->execute();
@@ -172,7 +263,23 @@ class CompetencyManager {
                 $stmt = $this->db->prepare("DELETE FROM competency_models WHERE id = ?");
             }
             
-            return $stmt->execute([$modelId]);
+            $result = $stmt->execute([$modelId]);
+            
+            if ($result) {
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    $hasStatusColumn ? 'model_archived' : 'model_deleted',
+                    [
+                        'model_name' => $modelName
+                    ],
+                    $modelId,
+                    'model',
+                    '?page=competency_models',
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error deleting competency model: " . $e->getMessage());
             return false;
@@ -182,6 +289,16 @@ class CompetencyManager {
     // Update competency
     public function updateCompetency($competencyId, $updateData) {
         try {
+            // Get competency and model info for notification
+            $competencyStmt = $this->db->prepare("
+                SELECT c.name as competency_name, cm.name as model_name, c.model_id 
+                FROM competencies c 
+                JOIN competency_models cm ON c.model_id = cm.id 
+                WHERE c.id = ?
+            ");
+            $competencyStmt->execute([$competencyId]);
+            $competency = $competencyStmt->fetch();
+            
             // Check if updated_at column exists
             $checkStmt = $this->db->prepare("SHOW COLUMNS FROM competencies LIKE 'updated_at'");
             $checkStmt->execute();
@@ -194,13 +311,30 @@ class CompetencyManager {
             
             $stmt = $this->db->prepare("UPDATE competencies SET $updateFields WHERE id = ?");
             
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $updateData['name'],
                 $updateData['description'],
                 $updateData['weight'],
                 $updateData['max_score'],
                 $competencyId
             ]);
+            
+            if ($result && $competency) {
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    'competency_updated',
+                    [
+                        'competency_name' => $updateData['name'],
+                        'model_name' => $competency['model_name']
+                    ],
+                    $competencyId,
+                    'competency',
+                    '?page=competency_models&action=view&id=' . $competency['model_id'],
+                    false
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error updating competency: " . $e->getMessage());
             return false;
@@ -209,8 +343,35 @@ class CompetencyManager {
     
     // Delete competency
     public function deleteCompetency($competencyId) {
+        // Get competency and model info before deletion for notification
+        $competencyStmt = $this->db->prepare("
+            SELECT c.name as competency_name, cm.name as model_name, c.model_id 
+            FROM competencies c 
+            JOIN competency_models cm ON c.model_id = cm.id 
+            WHERE c.id = ?
+        ");
+        $competencyStmt->execute([$competencyId]);
+        $competency = $competencyStmt->fetch();
+        
         $stmt = $this->db->prepare("DELETE FROM competencies WHERE id = ?");
-        return $stmt->execute([$competencyId]);
+        $result = $stmt->execute([$competencyId]);
+        
+        if ($result && $competency) {
+            // Notify HR managers and admins
+            $this->notificationManager->notifyHRManagers(
+                'competency_deleted',
+                [
+                    'competency_name' => $competency['competency_name'],
+                    'model_name' => $competency['model_name']
+                ],
+                $competencyId,
+                'competency',
+                '?page=competency_models&action=view&id=' . $competency['model_id'],
+                true
+            );
+        }
+        
+        return $result;
     }
     
     // Get competencies for a model
@@ -233,6 +394,30 @@ class CompetencyManager {
                 $cycleData['end_date'],
                 $cycleData['created_by']
             ]);
+            
+            if ($result) {
+                $cycleId = $this->db->lastInsertId();
+                
+                // Get creator name for notification
+                $creatorStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $creatorStmt->execute([$cycleData['created_by']]);
+                $creator = $creatorStmt->fetch();
+                $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'Unknown';
+                
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    'cycle_created',
+                    [
+                        'cycle_name' => $cycleData['name'],
+                        'created_by' => $creatorName,
+                        'type' => $cycleData['type']
+                    ],
+                    $cycleId,
+                    'cycle',
+                    '?page=evaluation_cycles&action=view&id=' . $cycleId,
+                    true
+                );
+            }
             
             return $result;
         } catch (PDOException $e) {
@@ -263,12 +448,43 @@ class CompetencyManager {
     public function assignEvaluation($evaluationData) {
         $stmt = $this->db->prepare("INSERT INTO evaluations (cycle_id, employee_id, evaluator_id, model_id) VALUES (?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $evaluationData['cycle_id'],
             $evaluationData['employee_id'],
             $evaluationData['evaluator_id'],
             $evaluationData['model_id']
         ]);
+        
+        if ($result) {
+            $evaluationId = $this->db->lastInsertId();
+            
+            // Get employee and cycle names for notification
+            $employeeStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+            $employeeStmt->execute([$evaluationData['employee_id']]);
+            $employee = $employeeStmt->fetch();
+            $employeeName = $employee ? $employee['first_name'] . ' ' . $employee['last_name'] : 'Unknown Employee';
+            
+            $cycleStmt = $this->db->prepare("SELECT name FROM evaluation_cycles WHERE id = ?");
+            $cycleStmt->execute([$evaluationData['cycle_id']]);
+            $cycle = $cycleStmt->fetch();
+            $cycleName = $cycle ? $cycle['name'] : 'Unknown Cycle';
+            
+            // Notify the evaluator
+            $this->notificationManager->notifyUser(
+                $evaluationData['evaluator_id'],
+                'evaluation_assigned',
+                [
+                    'employee_name' => $employeeName,
+                    'cycle_name' => $cycleName
+                ],
+                $evaluationId,
+                'evaluation',
+                '?page=evaluation_form&id=' . $evaluationId,
+                true
+            );
+        }
+        
+        return $result;
     }
     
     // Get evaluations for employee
@@ -312,6 +528,18 @@ class CompetencyManager {
         $this->db->beginTransaction();
         
         try {
+            // Get evaluation details for notification
+            $evaluationStmt = $this->db->prepare("
+                SELECT e.employee_id, e.evaluator_id, emp.first_name as employee_first_name, emp.last_name as employee_last_name,
+                       ev.first_name as evaluator_first_name, ev.last_name as evaluator_last_name
+                FROM evaluations e
+                JOIN users emp ON e.employee_id = emp.id
+                JOIN users ev ON e.evaluator_id = ev.id
+                WHERE e.id = ?
+            ");
+            $evaluationStmt->execute([$evaluation_id]);
+            $evaluation = $evaluationStmt->fetch();
+            
             // Delete existing scores
             $stmt = $this->db->prepare("DELETE FROM competency_scores WHERE evaluation_id = ?");
             $stmt->execute([$evaluation_id]);
@@ -346,6 +574,40 @@ class CompetencyManager {
             $stmt->execute([$overall_score, $evaluation_id]);
             
             $this->db->commit();
+            
+            // Send notifications after successful completion
+            if ($evaluation) {
+                $employeeName = $evaluation['employee_first_name'] . ' ' . $evaluation['employee_last_name'];
+                $evaluatorName = $evaluation['evaluator_first_name'] . ' ' . $evaluation['evaluator_last_name'];
+                
+                // Notify HR managers about completed evaluation
+                $this->notificationManager->notifyHRManagers(
+                    'evaluation_completed',
+                    [
+                        'employee_name' => $employeeName,
+                        'evaluator_name' => $evaluatorName
+                    ],
+                    $evaluation_id,
+                    'evaluation',
+                    '?page=evaluations&action=view&id=' . $evaluation_id,
+                    false
+                );
+                
+                // Notify the employee about completed evaluation
+                $this->notificationManager->notifyUser(
+                    $evaluation['employee_id'],
+                    'score_submitted',
+                    [
+                        'employee_name' => $employeeName,
+                        'evaluator_name' => $evaluatorName
+                    ],
+                    $evaluation_id,
+                    'evaluation',
+                    '?page=my_evaluations&action=view&id=' . $evaluation_id,
+                    false
+                );
+            }
+            
             return true;
             
         } catch (Exception $e) {
@@ -520,21 +782,54 @@ class CompetencyManager {
     }
     
     // Update evaluation cycle
-    public function updateEvaluationCycle($cycleId, $updateData) {
+    public function updateEvaluationCycle($cycleId, $updateData, $updatedBy = null) {
         try {
+            // Get cycle name before update for notification
+            $cycleStmt = $this->db->prepare("SELECT name FROM evaluation_cycles WHERE id = ?");
+            $cycleStmt->execute([$cycleId]);
+            $cycle = $cycleStmt->fetch();
+            $cycleName = $cycle ? $cycle['name'] : 'Unknown Cycle';
+            
             $stmt = $this->db->prepare("
                 UPDATE evaluation_cycles SET 
                     name = ?, type = ?, start_date = ?, end_date = ?, updated_at = NOW()
                 WHERE id = ?
             ");
             
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $updateData['name'],
                 $updateData['type'],
                 $updateData['start_date'],
                 $updateData['end_date'],
                 $cycleId
             ]);
+            
+            if ($result) {
+                // Use provided user info or get from session
+                if (!$updatedBy) {
+                    $userStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                    $userStmt->execute([$_SESSION['user_id'] ?? 1]);
+                    $user = $userStmt->fetch();
+                    $updatedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
+                }
+                
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    'cycle_updated',
+                    [
+                        'cycle_name' => $cycleName,
+                        'new_name' => $updateData['name'],
+                        'type' => $updateData['type'],
+                        'updated_by' => $updatedBy
+                    ],
+                    $cycleId,
+                    'cycle',
+                    '?page=evaluation_cycles&action=view&id=' . $cycleId,
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error updating evaluation cycle: " . $e->getMessage());
             return false;
@@ -542,15 +837,46 @@ class CompetencyManager {
     }
     
     // Delete evaluation cycle
-    public function deleteEvaluationCycle($cycleId) {
+    public function deleteEvaluationCycle($cycleId, $deletedBy = null) {
         try {
+            // Get cycle name before deletion for notification
+            $cycleStmt = $this->db->prepare("SELECT name FROM evaluation_cycles WHERE id = ?");
+            $cycleStmt->execute([$cycleId]);
+            $cycle = $cycleStmt->fetch();
+            $cycleName = $cycle ? $cycle['name'] : 'Unknown Cycle';
+            
             // First delete all evaluations in this cycle
             $stmt = $this->db->prepare("DELETE FROM evaluations WHERE cycle_id = ?");
             $stmt->execute([$cycleId]);
             
             // Then delete the cycle
             $stmt = $this->db->prepare("DELETE FROM evaluation_cycles WHERE id = ?");
-            return $stmt->execute([$cycleId]);
+            $result = $stmt->execute([$cycleId]);
+            
+            if ($result) {
+                // Use provided user info or get from session
+                if (!$deletedBy) {
+                    $userStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                    $userStmt->execute([$_SESSION['user_id'] ?? 1]);
+                    $user = $userStmt->fetch();
+                    $deletedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
+                }
+                
+                // Notify HR managers and admins
+                $this->notificationManager->notifyHRManagers(
+                    'cycle_deleted',
+                    [
+                        'cycle_name' => $cycleName,
+                        'deleted_by' => $deletedBy
+                    ],
+                    $cycleId,
+                    'cycle',
+                    '?page=evaluation_cycles',
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error deleting evaluation cycle: " . $e->getMessage());
             return false;

@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/data/db.php';
+
 require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/learning.php';
 
@@ -34,10 +35,20 @@ if ($_POST) {
             
             // Handle different enrollment options
             if ($autoEnroll === 'immediate' && $sessionId) {
-                // Immediate enrollment in specific session
-                $stmt = $db->prepare("INSERT INTO training_enrollments (session_id, employee_id, enrollment_date, attendance_status, completion_status) VALUES (?, ?, NOW(), 'enrolled', 'not_started')");
-                $stmt->execute([$sessionId, $employeeId]);
-                $enrollmentMessage = ' Employee has been automatically enrolled in the selected training session.';
+                // Immediate enrollment in specific session using LearningManager for notifications
+                $enrollmentData = [
+                    'session_id' => $sessionId,
+                    'employee_id' => $employeeId,
+                    'enrollment_date' => date('Y-m-d H:i:s'),
+                    'status' => 'enrolled',
+                    'enrolled_by' => $current_user['id']
+                ];
+                
+                if ($learningManager->enrollEmployee($enrollmentData)) {
+                    $enrollmentMessage = ' Employee has been automatically enrolled in the selected training session.';
+                } else {
+                    $enrollmentMessage = ' Failed to enroll employee automatically.';
+                }
                 
             } elseif ($autoEnroll === 'next_available' && $moduleId) {
                 // Auto-enroll in next available session for this module
@@ -53,9 +64,20 @@ if ($_POST) {
                 $nextSession = $stmt->fetch();
                 
                 if ($nextSession) {
-                    $stmt = $db->prepare("INSERT INTO training_enrollments (session_id, employee_id, enrollment_date, attendance_status, completion_status) VALUES (?, ?, NOW(), 'enrolled', 'not_started')");
-                    $stmt->execute([$nextSession['id'], $employeeId]);
-                    $enrollmentMessage = ' Employee has been automatically enrolled in the next available training session.';
+                    // Use LearningManager for notifications
+                    $enrollmentData = [
+                        'session_id' => $nextSession['id'],
+                        'employee_id' => $employeeId,
+                        'enrollment_date' => date('Y-m-d H:i:s'),
+                        'status' => 'enrolled',
+                        'enrolled_by' => $current_user['id']
+                    ];
+                    
+                    if ($learningManager->enrollEmployee($enrollmentData)) {
+                        $enrollmentMessage = ' Employee has been automatically enrolled in the next available training session.';
+                    } else {
+                        $enrollmentMessage = ' Failed to enroll employee in next available session.';
+                    }
                 } else {
                     $enrollmentMessage = ' No available sessions found for auto-enrollment. Employee will be notified when sessions become available.';
                 }

@@ -1,5 +1,5 @@
 <?php
-require_once '../data/db.php';
+require_once __DIR__ . '/../data/db.php';
 
 // Prevent direct access
 if (!isset($_POST['session_id'])) {
@@ -14,12 +14,12 @@ try {
     
     // Get session details with related information
     $stmt = $db->prepare("
-        SELECT ts.*, tc.title as training_title, tc.description as training_description,
+        SELECT ts.*, tm.title as training_title, tm.description as training_description,
                trainer.first_name as trainer_first_name, trainer.last_name as trainer_last_name,
                creator.first_name as creator_first_name, creator.last_name as creator_last_name,
                COUNT(te.id) as enrollment_count
         FROM training_sessions ts
-        LEFT JOIN training_catalog tc ON ts.module_id = tc.id
+        LEFT JOIN training_modules tm ON ts.module_id = tm.id
         LEFT JOIN users trainer ON ts.trainer_id = trainer.id
         LEFT JOIN users creator ON ts.created_by = creator.id
         LEFT JOIN training_enrollments te ON ts.id = te.session_id
@@ -47,6 +47,9 @@ try {
     echo json_encode(['success' => false, 'message' => 'An error occurred']);
 }
 ?>
+
+
+
 
 
 

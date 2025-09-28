@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/data/db.php';
+
 require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/learning.php';
 
@@ -18,58 +19,20 @@ $db = getDB();
 $message = '';
 $error = '';
 
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['create_course'])) {
-        $courseData = [
-            'title' => $_POST['title'],
-            'description' => $_POST['description'],
-            'category' => $_POST['category'],
-            'type' => $_POST['type'],
-            'duration_hours' => $_POST['duration_hours'],
-            'max_participants' => $_POST['max_participants'],
-            'prerequisites' => $_POST['prerequisites'],
-            'learning_objectives' => $_POST['learning_objectives'],
-            'created_by' => $current_user['id']
-        ];
-        
-        if ($learningManager->createTraining($courseData)) {
+// Form processing is now handled in index.php before any output
+
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+    switch ($_GET['success']) {
+        case 'course_created':
             $message = 'Course created successfully!';
-            $auth->logActivity('create_course', 'training_catalog', null, null, $courseData);
-        } else {
-            $error = 'Failed to create course.';
-        }
-    }
-    
-    if (isset($_POST['update_course'])) {
-        $courseId = $_POST['course_id'];
-        $updateData = [
-            'title' => $_POST['title'],
-            'description' => $_POST['description'],
-            'category' => $_POST['category'],
-            'type' => $_POST['type'],
-            'duration_hours' => $_POST['duration_hours'],
-            'max_participants' => $_POST['max_participants'],
-            'prerequisites' => $_POST['prerequisites'],
-            'learning_objectives' => $_POST['learning_objectives']
-        ];
-        
-        if ($learningManager->updateTraining($courseId, $updateData)) {
+            break;
+        case 'course_updated':
             $message = 'Course updated successfully!';
-            $auth->logActivity('update_course', 'training_catalog', $courseId, null, $updateData);
-        } else {
-            $error = 'Failed to update course.';
-        }
-    }
-    
-    if (isset($_POST['delete_course'])) {
-        $courseId = $_POST['course_id'];
-        if ($learningManager->deleteTraining($courseId)) {
+            break;
+        case 'course_deleted':
             $message = 'Course deleted successfully!';
-            $auth->logActivity('delete_course', 'training_catalog', $courseId, null, null);
-        } else {
-            $error = 'Failed to delete course.';
-        }
+            break;
     }
 }
 
@@ -365,11 +328,11 @@ try {
                                 <label class="form-label">Type *</label>
                                 <select class="form-control" name="type" required>
                                     <option value="">Select Type</option>
-                                    <option value="Online">Online</option>
-                                    <option value="Classroom">Classroom</option>
-                                    <option value="Workshop">Workshop</option>
-                                    <option value="Seminar">Seminar</option>
-                                    <option value="Self-paced">Self-paced</option>
+                                    <option value="skill_development">Skill Development</option>
+                                    <option value="certification">Certification</option>
+                                    <option value="compliance">Compliance</option>
+                                    <option value="leadership">Leadership</option>
+                                    <option value="technical">Technical</option>
                                 </select>
                             </div>
                         </div>
@@ -453,11 +416,11 @@ try {
                                 <label class="form-label">Type *</label>
                                 <select class="form-control" name="type" id="edit_type" required>
                                     <option value="">Select Type</option>
-                                    <option value="Online">Online</option>
-                                    <option value="Classroom">Classroom</option>
-                                    <option value="Workshop">Workshop</option>
-                                    <option value="Seminar">Seminar</option>
-                                    <option value="Self-paced">Self-paced</option>
+                                    <option value="skill_development">Skill Development</option>
+                                    <option value="certification">Certification</option>
+                                    <option value="compliance">Compliance</option>
+                                    <option value="leadership">Leadership</option>
+                                    <option value="technical">Technical</option>
                                 </select>
                             </div>
                         </div>

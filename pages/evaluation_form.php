@@ -33,29 +33,13 @@ if (!$evaluation) {
     }
 }
 
-// Handle form submission
-if ($_POST && !$error) {
-    if (isset($_POST['submit_scores'])) {
-        $scores = [];
-        
-        foreach ($_POST['scores'] as $competency_id => $score_data) {
-            $scores[] = [
-                'competency_id' => $competency_id,
-                'score' => $score_data['score'],
-                'comments' => $score_data['comments'] ?? ''
-            ];
-        }
-        
-        if ($competencyManager->submitScores($evaluation_id, $scores)) {
-            $message = 'Evaluation completed successfully!';
-            $auth->logActivity('complete_evaluation', 'evaluations', $evaluation_id, null, ['scores_count' => count($scores)]);
-            
-            // Refresh evaluation data
-            $evaluation = $competencyManager->getEvaluationDetails($evaluation_id);
-        } else {
-            $error = 'Failed to submit evaluation scores.';
-        }
-    }
+// Form processing is now handled in index.php before any output
+
+// Handle success messages from redirects
+if (isset($_GET['success']) && $_GET['success'] === 'scores_submitted') {
+    $message = 'Evaluation completed successfully!';
+    // Refresh evaluation data
+    $evaluation = $competencyManager->getEvaluationDetails($evaluation_id);
 }
 
 // Get competencies for the model

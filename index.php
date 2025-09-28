@@ -21,6 +21,373 @@ $termsAcceptance = new TermsAcceptance($conn);
 $userId = $current_user['id'] ?? null;
 $termsAccepted = $userId ? $termsAcceptance->hasUserAcceptedTerms($userId) : false;
 
+// Handle competency models form processing BEFORE any HTML output
+if ($page === 'competency_models' && $_POST) {
+    require_once 'includes/functions/competency.php';
+    
+    $competencyManager = new CompetencyManager();
+    
+    if (isset($_POST['create_model'])) {
+        $modelData = [
+            'name' => $_POST['name'],
+            'description' => $_POST['description'],
+            'category' => $_POST['category'],
+            'target_roles' => explode(',', $_POST['target_roles']),
+            'assessment_method' => $_POST['assessment_method'],
+            'created_by' => $current_user['id']
+        ];
+        
+        if ($competencyManager->createModel($modelData)) {
+            $auth->logActivity('create_competency_model', 'competency_models', null, null, $modelData);
+            header('Location: ?page=competency_models&success=model_created');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['add_competency'])) {
+        $competencyData = [
+            'model_id' => $_POST['model_id'],
+            'name' => $_POST['competency_name'],
+            'description' => $_POST['competency_description'],
+            'weight' => $_POST['weight'],
+            'max_score' => $_POST['max_score']
+        ];
+        
+        if ($competencyManager->addCompetency($competencyData)) {
+            $auth->logActivity('add_competency', 'competencies', null, null, $competencyData);
+            header('Location: ?page=competency_models&success=competency_added');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['update_model'])) {
+        $modelId = $_POST['model_id'];
+        $updateData = [
+            'name' => $_POST['name'],
+            'description' => $_POST['description'],
+            'category' => $_POST['category'],
+            'target_roles' => explode(',', $_POST['target_roles']),
+            'assessment_method' => $_POST['assessment_method'],
+            'status' => $_POST['status']
+        ];
+        
+        if ($competencyManager->updateModel($modelId, $updateData, $current_user['first_name'] . ' ' . $current_user['last_name'])) {
+            $auth->logActivity('update_competency_model', 'competency_models', $modelId, null, $updateData);
+            header('Location: ?page=competency_models&success=model_updated');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['delete_model'])) {
+        $modelId = $_POST['model_id'];
+        
+        if ($competencyManager->deleteModel($modelId)) {
+            $auth->logActivity('delete_competency_model', 'competency_models', $modelId, null, null);
+            header('Location: ?page=competency_models&success=model_deleted');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['update_competency'])) {
+        $competencyId = $_POST['competency_id'];
+        $updateData = [
+            'name' => $_POST['competency_name'],
+            'description' => $_POST['competency_description'],
+            'weight' => $_POST['weight'],
+            'max_score' => $_POST['max_score']
+        ];
+        
+        if ($competencyManager->updateCompetency($competencyId, $updateData)) {
+            $auth->logActivity('update_competency', 'competencies', $competencyId, null, $updateData);
+            header('Location: ?page=competency_models&success=competency_updated');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['delete_competency'])) {
+        $competencyId = $_POST['competency_id'];
+        
+        if ($competencyManager->deleteCompetency($competencyId)) {
+            $auth->logActivity('delete_competency', 'competencies', $competencyId, null, null);
+            header('Location: ?page=competency_models&success=competency_deleted');
+            exit;
+        }
+    }
+}
+
+// Handle evaluation cycles form processing BEFORE any HTML output
+if ($page === 'evaluation_cycles' && $_POST) {
+    require_once 'includes/functions/competency.php';
+    
+    $competencyManager = new CompetencyManager();
+    
+    if (isset($_POST['create_cycle'])) {
+        $cycleData = [
+            'name' => $_POST['name'],
+            'type' => $_POST['type'],
+            'start_date' => $_POST['start_date'],
+            'end_date' => $_POST['end_date'],
+            'created_by' => $current_user['id']
+        ];
+        
+        if ($competencyManager->createEvaluationCycle($cycleData)) {
+            $auth->logActivity('create_evaluation_cycle', 'evaluation_cycles', null, null, $cycleData);
+            header('Location: ?page=evaluation_cycles&success=cycle_created');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['update_cycle'])) {
+        $cycleId = $_POST['cycle_id'];
+        $updateData = [
+            'name' => $_POST['name'],
+            'type' => $_POST['type'],
+            'start_date' => $_POST['start_date'],
+            'end_date' => $_POST['end_date']
+        ];
+        
+        if ($competencyManager->updateEvaluationCycle($cycleId, $updateData, $current_user['first_name'] . ' ' . $current_user['last_name'])) {
+            $auth->logActivity('update_evaluation_cycle', 'evaluation_cycles', $cycleId, null, $updateData);
+            header('Location: ?page=evaluation_cycles&success=cycle_updated');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['delete_cycle'])) {
+        $cycleId = $_POST['cycle_id'];
+        
+        if ($competencyManager->deleteEvaluationCycle($cycleId, $current_user['first_name'] . ' ' . $current_user['last_name'])) {
+            $auth->logActivity('delete_evaluation_cycle', 'evaluation_cycles', $cycleId, null, null);
+            header('Location: ?page=evaluation_cycles&success=cycle_deleted');
+            exit;
+        }
+    }
+}
+
+// Handle learning management form processing BEFORE any HTML output
+if ($page === 'learning_management' && $_POST) {
+    require_once 'includes/functions/learning.php';
+    
+    $learningManager = new LearningManager();
+    
+    if (isset($_POST['create_course'])) {
+        $courseData = [
+            'title' => $_POST['title'],
+            'description' => $_POST['description'],
+            'category' => $_POST['category'],
+            'type' => $_POST['type'],
+            'duration_hours' => $_POST['duration_hours'],
+            'max_participants' => $_POST['max_participants'],
+            'prerequisites' => $_POST['prerequisites'],
+            'learning_objectives' => $_POST['learning_objectives'],
+            'created_by' => $current_user['id']
+        ];
+        
+        if ($learningManager->createTraining($courseData)) {
+            $auth->logActivity('create_course', 'training_catalog', null, null, $courseData);
+            header('Location: ?page=learning_management&success=course_created');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['update_course'])) {
+        $courseId = $_POST['course_id'];
+        $updateData = [
+            'title' => $_POST['title'],
+            'description' => $_POST['description'],
+            'category' => $_POST['category'],
+            'type' => $_POST['type'],
+            'duration_hours' => $_POST['duration_hours'],
+            'max_participants' => $_POST['max_participants'],
+            'prerequisites' => $_POST['prerequisites'],
+            'learning_objectives' => $_POST['learning_objectives']
+        ];
+        
+        if ($learningManager->updateTraining($courseId, $updateData, $current_user['id'])) {
+            $auth->logActivity('update_course', 'training_catalog', $courseId, null, $updateData);
+            header('Location: ?page=learning_management&success=course_updated');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['delete_course'])) {
+        $courseId = $_POST['course_id'];
+        
+        if ($learningManager->deleteTraining($courseId, $current_user['id'])) {
+            $auth->logActivity('delete_course', 'training_catalog', $courseId, null, null);
+            header('Location: ?page=learning_management&success=course_deleted');
+            exit;
+        }
+    }
+}
+
+// Handle training management form processing BEFORE any HTML output
+if ($page === 'training_management' && $_POST) {
+    require_once 'includes/functions/learning.php';
+    
+    $learningManager = new LearningManager();
+    
+    if (isset($_POST['submit_feedback'])) {
+        $enrollmentId = $_POST['enrollment_id'];
+        $score = $_POST['score'];
+        $feedback = $_POST['feedback'];
+        $completionStatus = $_POST['completion_status'];
+        
+        $db = getDB();
+        $stmt = $db->prepare("
+            UPDATE training_enrollments 
+            SET score = ?, feedback = ?, completion_status = ?, completion_date = NOW(), updated_at = NOW()
+            WHERE id = ?
+        ");
+        
+        if ($stmt->execute([$score, $feedback, $completionStatus, $enrollmentId])) {
+            $auth->logActivity('submit_training_feedback', 'training_enrollments', $enrollmentId, null, [
+                'score' => $score,
+                'completion_status' => $completionStatus
+            ]);
+            
+            // Send notifications for feedback submission
+            try {
+                require_once 'includes/functions/notification_manager.php';
+                $notificationManager = new NotificationManager();
+                
+                // Get enrollment details for notifications
+                $stmt = $db->prepare("
+                    SELECT te.employee_id, te.score as old_score, ts.session_name, tm.title as course_title,
+                           u.first_name as employee_first_name, u.last_name as employee_last_name
+                    FROM training_enrollments te
+                    JOIN training_sessions ts ON te.session_id = ts.id
+                    JOIN training_modules tm ON ts.module_id = tm.id
+                    JOIN users u ON te.employee_id = u.id
+                    WHERE te.id = ?
+                ");
+                $stmt->execute([$enrollmentId]);
+                $enrollment = $stmt->fetch();
+                
+                if ($enrollment) {
+                    // Notify the employee about their feedback/score
+                    $notificationManager->createNotification(
+                        $enrollment['employee_id'],
+                        'feedback_submitted',
+                        'Training Feedback Submitted',
+                        'Feedback has been submitted for your training "' . $enrollment['course_title'] . '" with a score of ' . $score . '.',
+                        $enrollmentId,
+                        'enrollment',
+                        '?page=my_trainings',
+                        true
+                    );
+                    
+                    // Notify HR managers about the feedback submission
+                    $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager') AND status = 'active'");
+                    $stmt->execute();
+                    $hrUsers = $stmt->fetchAll();
+                    
+                    foreach ($hrUsers as $hrUser) {
+                        $notificationManager->createNotification(
+                            $hrUser['id'],
+                            'feedback_submitted',
+                            'Training Feedback Submitted',
+                            'Feedback has been submitted for ' . $enrollment['employee_first_name'] . ' ' . $enrollment['employee_last_name'] . '\'s training "' . $enrollment['course_title'] . '" with a score of ' . $score . ' by ' . $current_user['first_name'] . ' ' . $current_user['last_name'] . '.',
+                            $enrollmentId,
+                            'enrollment',
+                            '?page=training_management',
+                            true
+                        );
+                    }
+                }
+            } catch (Exception $e) {
+                // Log notification error but don't fail the feedback submission
+                error_log("Notification error for feedback submission: " . $e->getMessage());
+            }
+            
+            header('Location: ?page=training_management&success=feedback_submitted');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['create_session'])) {
+        $sessionData = [
+            'training_id' => $_POST['training_id'],
+            'session_name' => $_POST['session_name'],
+            'session_date' => $_POST['session_date'],
+            'start_time' => $_POST['start_time'],
+            'end_time' => $_POST['end_time'],
+            'location' => $_POST['location'],
+            'trainer_id' => $_POST['trainer_id'],
+            'max_participants' => $_POST['max_participants'],
+            'status' => $_POST['status'],
+            'created_by' => $current_user['id']
+        ];
+        
+        if ($learningManager->scheduleSession($sessionData)) {
+            $auth->logActivity('create_session', 'training_sessions', null, null, $sessionData);
+            header('Location: ?page=training_management&success=session_created');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['update_session'])) {
+        $sessionData = [
+            'training_id' => $_POST['edit_training_id'],
+            'session_name' => $_POST['edit_session_name'],
+            'start_date' => $_POST['edit_start_date'],
+            'end_date' => $_POST['edit_end_date'],
+            'location' => $_POST['edit_location'],
+            'trainer_id' => $_POST['edit_trainer_id'],
+            'max_participants' => $_POST['edit_max_participants'],
+            'status' => $_POST['edit_status'],
+            'updated_by' => $current_user['id']
+        ];
+        
+        $sessionId = $_POST['edit_session_id'];
+        
+        if ($learningManager->updateSession($sessionId, $sessionData)) {
+            $auth->logActivity('update_session', 'training_sessions', $sessionId, null, $sessionData);
+            header('Location: ?page=training_management&success=session_updated');
+            exit;
+        }
+    }
+    
+    if (isset($_POST['enroll_employee'])) {
+        $enrollmentData = [
+            'session_id' => $_POST['session_id'],
+            'employee_id' => $_POST['employee_id'],
+            'enrollment_date' => date('Y-m-d H:i:s'),
+            'status' => 'enrolled',
+            'enrolled_by' => $current_user['id'] // Add the person who is enrolling the employee
+        ];
+        
+        if ($learningManager->enrollEmployee($enrollmentData)) {
+            $auth->logActivity('enroll_employee', 'training_enrollments', null, null, $enrollmentData);
+            header('Location: ?page=training_management&success=employee_enrolled');
+            exit;
+        }
+    }
+}
+
+// Handle evaluation form submissions BEFORE any HTML output
+if ($page === 'evaluation_form' && $_POST && isset($_POST['submit_scores'])) {
+    require_once 'includes/functions/competency.php';
+    
+    $competencyManager = new CompetencyManager();
+    $evaluation_id = $_GET['id'] ?? 0;
+    
+    $scores = [];
+    foreach ($_POST['scores'] as $competency_id => $score_data) {
+        $scores[] = [
+            'competency_id' => $competency_id,
+            'score' => $score_data['score'],
+            'comments' => $score_data['comments'] ?? ''
+        ];
+    }
+    
+    if ($competencyManager->submitScores($evaluation_id, $scores)) {
+        $auth->logActivity('complete_evaluation', 'evaluations', $evaluation_id, null, ['scores_count' => count($scores)]);
+        header('Location: ?page=evaluation_form&id=' . $evaluation_id . '&success=scores_submitted');
+        exit;
+    }
+}
+
 // Handle evaluations form processing BEFORE any HTML output
 if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
     require_once 'includes/functions/competency.php';

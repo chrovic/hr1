@@ -90,51 +90,20 @@ $competencyManager = new CompetencyManager();
 $message = '';
 $error = '';
 
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['create_cycle'])) {
-        $cycleData = [
-            'name' => $_POST['name'],
-            'type' => $_POST['type'],
-            'start_date' => $_POST['start_date'],
-            'end_date' => $_POST['end_date'],
-            'created_by' => $current_user['id']
-        ];
-        
-        if ($competencyManager->createEvaluationCycle($cycleData)) {
+// Form processing is now handled in index.php before any output
+
+// Handle success messages from redirects
+if (isset($_GET['success'])) {
+    switch ($_GET['success']) {
+        case 'cycle_created':
             $message = 'Evaluation cycle created successfully!';
-            $auth->logActivity('create_evaluation_cycle', 'evaluation_cycles', null, null, $cycleData);
-        } else {
-            $error = 'Failed to create evaluation cycle. Please check that all values are valid.';
-        }
-    }
-    
-    if (isset($_POST['update_cycle'])) {
-        $cycleId = $_POST['cycle_id'];
-        $updateData = [
-            'name' => $_POST['name'],
-            'type' => $_POST['type'],
-            'start_date' => $_POST['start_date'],
-            'end_date' => $_POST['end_date']
-        ];
-        
-        if ($competencyManager->updateEvaluationCycle($cycleId, $updateData)) {
+            break;
+        case 'cycle_updated':
             $message = 'Evaluation cycle updated successfully!';
-            $auth->logActivity('update_evaluation_cycle', 'evaluation_cycles', $cycleId, null, $updateData);
-        } else {
-            $error = 'Failed to update evaluation cycle.';
-        }
-    }
-    
-    if (isset($_POST['delete_cycle'])) {
-        $cycleId = $_POST['cycle_id'];
-        
-        if ($competencyManager->deleteEvaluationCycle($cycleId)) {
+            break;
+        case 'cycle_deleted':
             $message = 'Evaluation cycle deleted successfully!';
-            $auth->logActivity('delete_evaluation_cycle', 'evaluation_cycles', $cycleId, null, null);
-        } else {
-            $error = 'Failed to delete evaluation cycle.';
-        }
+            break;
     }
 }
 

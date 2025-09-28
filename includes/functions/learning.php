@@ -2,16 +2,19 @@
 // Learning Management System
 class LearningManager {
     private $db;
+    private $notificationManager;
     
     public function __construct() {
         $this->db = getDB();
+        require_once 'notification_manager.php';
+        $this->notificationManager = new NotificationManager();
     }
     
     // Create training in catalog
     public function createTraining($trainingData) {
-        $stmt = $this->db->prepare("INSERT INTO training_modules (title, description, category, type, duration_hours, max_participants, prerequisites, learning_objectives, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $this->db->prepare("INSERT INTO training_modules (title, description, category, type, duration_hours, max_participants, prerequisites, learning_objectives, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $trainingData['title'],
             $trainingData['description'],
             $trainingData['category'],
@@ -20,8 +23,25 @@ class LearningManager {
             $trainingData['max_participants'],
             $trainingData['prerequisites'],
             $trainingData['learning_objectives'],
+            'active', // Set status to 'active' by default
             $trainingData['created_by']
         ]);
+        
+        // Send notification if training was created successfully
+        if ($result) {
+            $courseId = $this->db->lastInsertId();
+            try {
+                $this->notificationManager->notifyHRManagers('course_created', [
+                    'course_title' => $trainingData['title'],
+                    'created_by' => $this->getUserName($trainingData['created_by'])
+                ], $courseId, 'course', '?page=learning_management', true);
+            } catch (Exception $e) {
+                // Log notification error but don't fail the course creation
+                error_log("Notification error for course creation: " . $e->getMessage());
+            }
+        }
+        
+        return $result;
     }
     
     // Get all training catalog
@@ -118,7 +138,7 @@ class LearningManager {
     public function scheduleSession($sessionData) {
         $stmt = $this->db->prepare("INSERT INTO training_sessions (module_id, session_name, trainer_id, start_date, end_date, location, max_participants, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $sessionData['training_id'],
             $sessionData['session_name'] ?? 'Training Session',
             $sessionData['trainer_id'] ?? $sessionData['created_by'],
@@ -129,6 +149,49 @@ class LearningManager {
             $sessionData['status'] ?? 'scheduled',
             $sessionData['created_by']
         ]);
+        
+        // Send notification if session was created successfully
+        if ($result) {
+            $sessionId = $this->db->lastInsertId();
+            $this->notificationManager->notifyHRManagers('session_created', [
+                'session_name' => $sessionData['session_name'] ?? 'Training Session',
+                'created_by' => $this->getUserName($sessionData['created_by'])
+            ], $sessionId, 'session', '?page=training_management', true);
+        }
+        
+        return $result;
+    }
+    
+    // Update training session
+    public function updateSession($sessionId, $sessionData) {
+        $stmt = $this->db->prepare("
+            UPDATE training_sessions 
+            SET module_id = ?, session_name = ?, trainer_id = ?, start_date = ?, end_date = ?, 
+                location = ?, max_participants = ?, status = ?
+            WHERE id = ?
+        ");
+        
+        $result = $stmt->execute([
+            $sessionData['training_id'],
+            $sessionData['session_name'] ?? 'Training Session',
+            $sessionData['trainer_id'] ?? null,
+            $sessionData['start_date'],
+            $sessionData['end_date'],
+            $sessionData['location'],
+            $sessionData['max_participants'],
+            $sessionData['status'] ?? 'scheduled',
+            $sessionId
+        ]);
+        
+        // Send notification if session was updated successfully
+        if ($result) {
+            $this->notificationManager->notifyHRManagers('session_updated', [
+                'session_name' => $sessionData['session_name'] ?? 'Training Session',
+                'updated_by' => $this->getUserName($sessionData['updated_by'] ?? $sessionData['created_by'])
+            ], $sessionId, 'session', '?page=training_management', true);
+        }
+        
+        return $result;
     }
     
     // Get training sessions
@@ -230,7 +293,46 @@ class LearningManager {
     public function markCompletion($enrollment_id, $completion_status, $score = null, $feedback = null) {
         $stmt = $this->db->prepare("UPDATE training_enrollments SET completion_status = ?, completion_score = ?, feedback = ? WHERE id = ?");
         
-        return $stmt->execute([$completion_status, $score, $feedback, $enrollment_id]);
+        $result = $stmt->execute([$completion_status, $score, $feedback, $enrollment_id]);
+        
+        // Send notification if completion was marked successfully
+        if ($result) {
+            // Get enrollment details for notification
+            $stmt = $this->db->prepare("
+                SELECT te.employee_id, ts.session_name, tm.title as course_title 
+                FROM training_enrollments te
+                JOIN training_sessions ts ON te.session_id = ts.id
+                JOIN training_modules tm ON ts.module_id = tm.id
+                WHERE te.id = ?
+            ");
+            $stmt->execute([$enrollment_id]);
+            $enrollment = $stmt->fetch();
+            
+            if ($enrollment) {
+                if ($completion_status === 'completed') {
+                    // Notify the employee
+                    $this->notificationManager->notifyUser($enrollment['employee_id'], 'training_completed', [
+                        'course_title' => $enrollment['course_title'],
+                        'score' => $score ?? 'N/A'
+                    ], $enrollment_id, 'enrollment', '?page=my_trainings', true);
+                    
+                    // Notify HR managers
+                    $this->notificationManager->notifyHRManagers('training_completed', [
+                        'course_title' => $enrollment['course_title'],
+                        'employee_name' => $this->getUserName($enrollment['employee_id']),
+                        'score' => $score ?? 'N/A'
+                    ], $enrollment_id, 'enrollment', '?page=training_management', true);
+                } elseif ($completion_status === 'failed') {
+                    // Notify HR managers about failure
+                    $this->notificationManager->notifyHRManagers('training_failed', [
+                        'course_title' => $enrollment['course_title'],
+                        'employee_name' => $this->getUserName($enrollment['employee_id'])
+                    ], $enrollment_id, 'enrollment', '?page=training_management', true);
+                }
+            }
+        }
+        
+        return $result;
     }
     
     // Get training completion reports
@@ -494,19 +596,74 @@ class LearningManager {
     public function enrollEmployee($enrollmentData) {
         $stmt = $this->db->prepare("INSERT INTO training_enrollments (session_id, employee_id, enrollment_date, status) VALUES (?, ?, ?, ?)");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $enrollmentData['session_id'],
             $enrollmentData['employee_id'],
             $enrollmentData['enrollment_date'],
             $enrollmentData['status'] ?? 'enrolled'
         ]);
+        
+        // Send notification if enrollment was successful
+        if ($result) {
+            $enrollmentId = $this->db->lastInsertId();
+            
+            // Get session details for notification
+            $stmt = $this->db->prepare("
+                SELECT ts.session_name, tm.title as course_title 
+                FROM training_sessions ts 
+                JOIN training_modules tm ON ts.module_id = tm.id 
+                WHERE ts.id = ?
+            ");
+            $stmt->execute([$enrollmentData['session_id']]);
+            $session = $stmt->fetch();
+            
+            if ($session) {
+                // Debug logging
+                error_log("Enrollment notifications: Session found, creating notifications for enrollment ID: " . $enrollmentId);
+                
+                // Notify the employee about their enrollment
+                $employeeResult = $this->notificationManager->createNotification(
+                    $enrollmentData['employee_id'],
+                    'enrollment_created',
+                    'Training Enrollment Created',
+                    'You have been enrolled in training session "' . $session['session_name'] . '" by ' . $this->getUserName($enrollmentData['enrolled_by'] ?? $enrollmentData['employee_id']) . '.',
+                    $enrollmentId,
+                    'enrollment',
+                    '?page=my_trainings',
+                    true
+                );
+                error_log("Employee notification result: " . ($employeeResult ? 'success' : 'failed'));
+                
+                // Notify HR managers about the enrollment
+                $hrManagerIds = $this->getHRManagerIds();
+                error_log("HR Manager IDs: " . json_encode($hrManagerIds));
+                
+                foreach ($hrManagerIds as $hrId) {
+                    $hrResult = $this->notificationManager->createNotification(
+                        $hrId,
+                        'enrollment_created',
+                        'Employee Enrolled in Training',
+                        'Employee ' . $this->getUserName($enrollmentData['employee_id']) . ' has been enrolled in training session "' . $session['session_name'] . '" by ' . $this->getUserName($enrollmentData['enrolled_by'] ?? $enrollmentData['employee_id']) . '.',
+                        $enrollmentId,
+                        'enrollment',
+                        '?page=training_management',
+                        true
+                    );
+                    error_log("HR notification for ID {$hrId}: " . ($hrResult ? 'success' : 'failed'));
+                }
+            } else {
+                error_log("Enrollment notifications: No session found for session_id: " . $enrollmentData['session_id']);
+            }
+        }
+        
+        return $result;
     }
     
     // Update training
-    public function updateTraining($trainingId, $updateData) {
+    public function updateTraining($trainingId, $updateData, $updatedBy = null) {
         $stmt = $this->db->prepare("UPDATE training_modules SET title = ?, description = ?, category = ?, type = ?, duration_hours = ?, max_participants = ?, prerequisites = ?, learning_objectives = ?, updated_at = NOW() WHERE id = ?");
         
-        return $stmt->execute([
+        $result = $stmt->execute([
             $updateData['title'],
             $updateData['description'],
             $updateData['category'],
@@ -517,12 +674,37 @@ class LearningManager {
             $updateData['learning_objectives'],
             $trainingId
         ]);
+        
+        // Send notification if training was updated successfully
+        if ($result && $updatedBy) {
+            $this->notificationManager->notifyHRManagers('course_updated', [
+                'course_title' => $updateData['title'],
+                'updated_by' => $this->getUserName($updatedBy)
+            ], $trainingId, 'course', '?page=learning_management', true);
+        }
+        
+        return $result;
     }
     
     // Delete training
-    public function deleteTraining($trainingId) {
+    public function deleteTraining($trainingId, $deletedBy = null) {
+        // Get training title before deletion for notification
+        $stmt = $this->db->prepare("SELECT title FROM training_modules WHERE id = ?");
+        $stmt->execute([$trainingId]);
+        $training = $stmt->fetch();
+        
         $stmt = $this->db->prepare("UPDATE training_modules SET status = 'inactive' WHERE id = ?");
-        return $stmt->execute([$trainingId]);
+        $result = $stmt->execute([$trainingId]);
+        
+        // Send notification if training was deleted successfully
+        if ($result && $deletedBy && $training) {
+            $this->notificationManager->notifyHRManagers('course_deleted', [
+                'course_title' => $training['title'],
+                'deleted_by' => $this->getUserName($deletedBy)
+            ], $trainingId, 'course', '?page=learning_management', true);
+        }
+        
+        return $result;
     }
     
     // ==============================================
@@ -843,6 +1025,88 @@ class LearningManager {
         $stmt->execute($params);
         
         return $stmt->fetchAll();
+    }
+    
+    // Helper method to get user name
+    private function getUserName($userId) {
+        try {
+            $stmt = $this->db->prepare("SELECT CONCAT(first_name, ' ', last_name) as name FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch();
+            return $user ? $user['name'] : 'Unknown User';
+        } catch (PDOException $e) {
+            error_log("Error getting user name: " . $e->getMessage());
+            return 'Unknown User';
+        }
+    }
+    
+    // Get HR manager IDs
+    private function getHRManagerIds() {
+        try {
+            $stmt = $this->db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager') AND status = 'active'");
+            $stmt->execute();
+            $managers = $stmt->fetchAll();
+            return array_column($managers, 'id');
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+    
+    // Send feedback submission notifications
+    public function sendFeedbackNotifications($enrollmentId, $score, $submittedBy) {
+        try {
+            // Get enrollment details
+            $stmt = $this->db->prepare("
+                SELECT te.employee_id, ts.session_name, tm.title as course_title,
+                       u.first_name as employee_first_name, u.last_name as employee_last_name
+                FROM training_enrollments te
+                JOIN training_sessions ts ON te.session_id = ts.id
+                JOIN training_modules tm ON ts.module_id = tm.id
+                JOIN users u ON te.employee_id = u.id
+                WHERE te.id = ?
+            ");
+            $stmt->execute([$enrollmentId]);
+            $enrollment = $stmt->fetch();
+            
+            if (!$enrollment) {
+                return false;
+            }
+            
+            // Get submitter name
+            $submitterName = $this->getUserName($submittedBy);
+            
+            // Notify the employee
+            $this->notificationManager->createNotification(
+                $enrollment['employee_id'],
+                'feedback_submitted',
+                'Training Feedback Submitted',
+                'Feedback has been submitted for your training "' . $enrollment['course_title'] . '" with a score of ' . $score . '.',
+                $enrollmentId,
+                'enrollment',
+                '?page=my_trainings',
+                true
+            );
+            
+            // Notify HR managers
+            $hrManagerIds = $this->getHRManagerIds();
+            foreach ($hrManagerIds as $hrId) {
+                $this->notificationManager->createNotification(
+                    $hrId,
+                    'feedback_submitted',
+                    'Training Feedback Submitted',
+                    'Feedback has been submitted for ' . $enrollment['employee_first_name'] . ' ' . $enrollment['employee_last_name'] . '\'s training "' . $enrollment['course_title'] . '" with a score of ' . $score . ' by ' . $submitterName . '.',
+                    $enrollmentId,
+                    'enrollment',
+                    '?page=training_management',
+                    true
+                );
+            }
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Error sending feedback notifications: " . $e->getMessage());
+            return false;
+        }
     }
 }
 

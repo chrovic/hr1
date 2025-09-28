@@ -37,6 +37,60 @@ if ($_POST) {
                     'score' => $score,
                     'completion_status' => $completionStatus
                 ]);
+                
+                // Send notifications for feedback submission
+                try {
+                    require_once 'includes/functions/notification_manager.php';
+                    $notificationManager = new NotificationManager();
+                    
+                    // Get enrollment details for notifications
+                    $stmt = $db->prepare("
+                        SELECT te.employee_id, te.score as old_score, ts.session_name, tm.title as course_title,
+                               u.first_name as employee_first_name, u.last_name as employee_last_name
+                        FROM training_enrollments te
+                        JOIN training_sessions ts ON te.session_id = ts.id
+                        JOIN training_modules tm ON ts.module_id = tm.id
+                        JOIN users u ON te.employee_id = u.id
+                        WHERE te.id = ?
+                    ");
+                    $stmt->execute([$enrollmentId]);
+                    $enrollment = $stmt->fetch();
+                    
+                    if ($enrollment) {
+                        // Notify the employee about their feedback/score
+                        $notificationManager->createNotification(
+                            $enrollment['employee_id'],
+                            'feedback_submitted',
+                            'Training Feedback Submitted',
+                            'Feedback has been submitted for your training "' . $enrollment['course_title'] . '" with a score of ' . $score . '.',
+                            $enrollmentId,
+                            'enrollment',
+                            '?page=my_trainings',
+                            true
+                        );
+                        
+                        // Notify HR managers about the feedback submission
+                        $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager') AND status = 'active'");
+                        $stmt->execute();
+                        $hrUsers = $stmt->fetchAll();
+                        
+                        foreach ($hrUsers as $hrUser) {
+                            $notificationManager->createNotification(
+                                $hrUser['id'],
+                                'feedback_submitted',
+                                'Training Feedback Submitted',
+                                'Feedback has been submitted for ' . $enrollment['employee_first_name'] . ' ' . $enrollment['employee_last_name'] . '\'s training "' . $enrollment['course_title'] . '" with a score of ' . $score . ' by ' . $current_user['first_name'] . ' ' . $current_user['last_name'] . '.',
+                                $enrollmentId,
+                                'enrollment',
+                                '?page=training_management',
+                                true
+                            );
+                        }
+                    }
+                } catch (Exception $e) {
+                    // Log notification error but don't fail the feedback submission
+                    error_log("Notification error for feedback submission: " . $e->getMessage());
+                }
             } else {
                 $error = 'Failed to submit feedback.';
             }

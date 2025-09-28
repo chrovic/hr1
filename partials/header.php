@@ -17,18 +17,15 @@
             </a>
         </li>
         <li class="nav-item nav-notif">
-            <a class="nav-link text-muted my-2" href="#" data-toggle="modal" data-target=".modal-notif">
-                <span class="fe fe-bell fe-16"></span>
-                <span class="dot dot-md bg-success"></span>
-            </a>
+            <?php include 'partials/notification_dropdown_fixed.php'; ?>
         </li>
         <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle text-muted pr-0" href="#" id="navbarDropdownMenuLink" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" onclick="toggleUserDropdown(event)">
+            <a class="nav-link dropdown-toggle text-muted pr-0" href="#" id="profileDropdown" role="button" aria-haspopup="true" aria-expanded="false">
                 <span class="avatar avatar-sm mt-2">
                     <img src="assets/images/avatars/face-1.jpg" alt="<?php echo htmlspecialchars($current_user['first_name'] . ' ' . $current_user['last_name']); ?>" class="avatar-img rounded-circle">
                 </span>
             </a>
-            <div class="dropdown-menu dropdown-menu-right" id="userDropdownMenu" aria-labelledby="navbarDropdownMenuLink">
+            <div class="dropdown-menu dropdown-menu-right" id="profileDropdownMenu" aria-labelledby="profileDropdown">
                 <div class="dropdown-header">
                     <strong><?php echo htmlspecialchars($current_user['first_name'] . ' ' . $current_user['last_name']); ?></strong>
                     <div class="text-muted small"><?php echo ucfirst($current_user['role']); ?></div>
@@ -53,53 +50,119 @@
 </nav>
 
 <script>
-function toggleUserDropdown(event) {
-    event.preventDefault();
-    event.stopPropagation();
+// Custom dropdown handling without Bootstrap conflicts
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing dropdowns...');
     
-    console.log('User dropdown clicked!');
+    // Handle profile dropdown
+    const profileDropdown = document.getElementById('profileDropdown');
+    const profileMenu = document.getElementById('profileDropdownMenu');
     
-    const dropdownMenu = document.getElementById('userDropdownMenu');
-    const dropdownToggle = document.getElementById('navbarDropdownMenuLink');
+    console.log('Profile dropdown element:', profileDropdown);
+    console.log('Profile menu element:', profileMenu);
     
-    if (dropdownMenu && dropdownToggle) {
-        const isOpen = dropdownMenu.classList.contains('show');
-        
-        // Close all other dropdowns first
-        document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
-            if (menu !== dropdownMenu) {
-                menu.classList.remove('show');
-                const prevToggle = menu.previousElementSibling;
-                if (prevToggle) {
-                    prevToggle.setAttribute('aria-expanded', 'false');
-                }
+    if (profileDropdown && profileMenu) {
+        console.log('Adding profile dropdown event listener');
+        profileDropdown.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Profile dropdown clicked');
+            
+            // Close notification dropdown
+            const notificationMenu = document.getElementById('notificationDropdownMenu');
+            if (notificationMenu) {
+                notificationMenu.classList.remove('show');
+                document.getElementById('notificationDropdown').setAttribute('aria-expanded', 'false');
+            }
+            
+            // Toggle profile dropdown
+            const isOpen = profileMenu.classList.contains('show');
+            if (isOpen) {
+                profileMenu.classList.remove('show');
+                profileDropdown.setAttribute('aria-expanded', 'false');
+                console.log('Profile dropdown closed');
+            } else {
+                profileMenu.classList.add('show');
+                profileDropdown.setAttribute('aria-expanded', 'true');
+                console.log('Profile dropdown opened');
             }
         });
-        
-        if (isOpen) {
-            dropdownMenu.classList.remove('show');
-            dropdownToggle.setAttribute('aria-expanded', 'false');
-            console.log('Closing user dropdown');
-        } else {
-            dropdownMenu.classList.add('show');
-            dropdownToggle.setAttribute('aria-expanded', 'true');
-            console.log('Opening user dropdown');
-        }
     } else {
-        console.error('Dropdown elements not found!');
+        console.error('Profile dropdown elements not found!');
+        console.error('profileDropdown:', profileDropdown);
+        console.error('profileMenu:', profileMenu);
     }
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(e) {
-    const dropdownMenu = document.getElementById('userDropdownMenu');
-    const dropdownToggle = document.getElementById('navbarDropdownMenuLink');
     
-    if (dropdownMenu && dropdownToggle) {
-        if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
-            dropdownMenu.classList.remove('show');
-            dropdownToggle.setAttribute('aria-expanded', 'false');
-        }
+    // Handle notification dropdown
+    const notificationDropdown = document.getElementById('notificationDropdown');
+    const notificationMenu = document.getElementById('notificationDropdownMenu');
+    
+    if (notificationDropdown && notificationMenu) {
+        notificationDropdown.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Notification dropdown clicked');
+            
+            // Close profile dropdown
+            if (profileMenu) {
+                profileMenu.classList.remove('show');
+                profileDropdown.setAttribute('aria-expanded', 'false');
+            }
+            
+            // Toggle notification dropdown
+            const isOpen = notificationMenu.classList.contains('show');
+            if (isOpen) {
+                notificationMenu.classList.remove('show');
+                notificationDropdown.setAttribute('aria-expanded', 'false');
+                console.log('Notification dropdown closed');
+            } else {
+                notificationMenu.classList.add('show');
+                notificationDropdown.setAttribute('aria-expanded', 'true');
+                console.log('Notification dropdown opened');
+            }
+        });
     }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+        const isProfileClick = profileDropdown && profileDropdown.contains(e.target);
+        const isNotificationClick = notificationDropdown && notificationDropdown.contains(e.target);
+        const isProfileMenuClick = profileMenu && profileMenu.contains(e.target);
+        const isNotificationMenuClick = notificationMenu && notificationMenu.contains(e.target);
+        
+        if (!isProfileClick && !isNotificationClick && !isProfileMenuClick && !isNotificationMenuClick) {
+            // Close both dropdowns
+            if (profileMenu) {
+                profileMenu.classList.remove('show');
+                profileDropdown.setAttribute('aria-expanded', 'false');
+            }
+            if (notificationMenu) {
+                notificationMenu.classList.remove('show');
+                notificationDropdown.setAttribute('aria-expanded', 'false');
+            }
+            console.log('Dropdowns closed by outside click');
+        }
+    });
+    
+    console.log('Dropdown initialization complete');
+    
+    // Test profile dropdown with a simple approach
+    setTimeout(function() {
+        const testProfileDropdown = document.getElementById('profileDropdown');
+        if (testProfileDropdown) {
+            console.log('Profile dropdown found, adding test click handler');
+            testProfileDropdown.onclick = function(e) {
+                e.preventDefault();
+                console.log('Profile dropdown clicked via test handler');
+                const menu = document.getElementById('profileDropdownMenu');
+                if (menu) {
+                    menu.classList.toggle('show');
+                    console.log('Profile menu toggled');
+                }
+            };
+        } else {
+            console.error('Profile dropdown still not found after timeout');
+        }
+    }, 1000);
 });
 </script>

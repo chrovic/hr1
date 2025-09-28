@@ -1,6 +1,6 @@
 <?php
-require_once '../../includes/data/db.php';
-require_once '../../includes/functions/simple_auth.php';
+require_once __DIR__ . '/../data/db.php';
+require_once __DIR__ . '/../functions/simple_auth.php';
 
 header('Content-Type: application/json');
 

@@ -2,9 +2,12 @@
 // Succession Planning Management System
 class SuccessionPlanning {
     private $db;
+    private $notificationManager;
     
     public function __construct() {
         $this->db = getDB();
+        require_once 'notification_manager.php';
+        $this->notificationManager = new NotificationManager();
     }
     
     // Create critical role
@@ -15,7 +18,7 @@ class SuccessionPlanning {
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
             
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $roleData['position_title'],
                 $roleData['department'],
                 $roleData['description'],
@@ -24,6 +27,33 @@ class SuccessionPlanning {
                 $roleData['current_incumbent_id'] ?? null,
                 $roleData['created_by']
             ]);
+            
+            if ($result) {
+                $roleId = $this->db->lastInsertId();
+                
+                // Get creator name for notification
+                $creatorStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $creatorStmt->execute([$roleData['created_by']]);
+                $creator = $creatorStmt->fetch();
+                $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'System';
+                
+                // Notify succession managers
+                $this->notificationManager->notifySuccessionManagers(
+                    'role_created',
+                    [
+                        'role_title' => $roleData['position_title'],
+                        'department' => $roleData['department'],
+                        'risk_level' => $roleData['risk_level'],
+                        'created_by' => $creatorName
+                    ],
+                    $roleId,
+                    'critical_role',
+                    '?page=succession_planning&action=view_role&id=' . $roleId,
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error creating critical role: " . $e->getMessage());
             return false;
@@ -77,17 +107,16 @@ class SuccessionPlanning {
         try {
             $stmt = $this->db->prepare("
                 UPDATE critical_positions SET 
-                    position_title = ?, department = ?, level = ?, description = ?, 
-                    requirements = ?, risk_level = ?, current_incumbent_id = ?, updated_at = NOW()
+                    position_title = ?, department = ?, description = ?, 
+                    priority_level = ?, risk_level = ?, current_incumbent_id = ?, updated_at = NOW()
                 WHERE id = ?
             ");
             
             return $stmt->execute([
                 $updateData['position_title'],
                 $updateData['department'],
-                $updateData['level'],
                 $updateData['description'],
-                $updateData['requirements'],
+                $updateData['priority_level'] ?? 'medium',
                 $updateData['risk_level'],
                 $updateData['current_incumbent_id'] ?? null,
                 $roleId
@@ -117,7 +146,7 @@ class SuccessionPlanning {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $candidateData['role_id'],
                 $candidateData['employee_id'],
                 $candidateData['readiness_level'],
@@ -127,13 +156,50 @@ class SuccessionPlanning {
                 $candidateData['next_review_date'],
                 $candidateData['assigned_by']
             ]);
+            
+            if ($result) {
+                $candidateId = $this->db->lastInsertId();
+                
+                // Get employee, role, and assigner names for notification
+                $employeeStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $employeeStmt->execute([$candidateData['employee_id']]);
+                $employee = $employeeStmt->fetch();
+                $employeeName = $employee ? $employee['first_name'] . ' ' . $employee['last_name'] : 'Unknown Employee';
+                
+                $roleStmt = $this->db->prepare("SELECT position_title FROM critical_positions WHERE id = ?");
+                $roleStmt->execute([$candidateData['role_id']]);
+                $role = $roleStmt->fetch();
+                $roleTitle = $role ? $role['position_title'] : 'Unknown Role';
+                
+                $assignerStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $assignerStmt->execute([$candidateData['assigned_by']]);
+                $assigner = $assignerStmt->fetch();
+                $assignerName = $assigner ? $assigner['first_name'] . ' ' . $assigner['last_name'] : 'System';
+                
+                // Notify succession managers
+                $this->notificationManager->notifySuccessionManagers(
+                    'candidate_assigned',
+                    [
+                        'employee_name' => $employeeName,
+                        'role_title' => $roleTitle,
+                        'readiness_level' => $candidateData['readiness_level'],
+                        'assigned_by' => $assignerName
+                    ],
+                    $candidateId,
+                    'succession_candidate',
+                    '?page=succession_planning&action=view_candidates&role_id=' . $candidateData['role_id'],
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error assigning candidate: " . $e->getMessage());
             return false;
         }
     }
     
-    // Get succession candidates for a role
+    // Get role candidates
     public function getRoleCandidates($roleId) {
         try {
             $stmt = $this->db->prepare("
@@ -163,7 +229,7 @@ class SuccessionPlanning {
                        assigner.first_name as assigned_by_first_name, assigner.last_name as assigned_by_last_name
                 FROM succession_candidates sc
                 JOIN users u ON sc.employee_id = u.id
-                JOIN critical_roles cr ON sc.role_id = cr.id
+                JOIN critical_positions cr ON sc.role_id = cr.id
                 JOIN users assigner ON sc.assigned_by = assigner.id
                 ORDER BY cr.position_title ASC, sc.readiness_level ASC
             ");
@@ -219,7 +285,7 @@ class SuccessionPlanning {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $planData['role_id'],
                 $planData['plan_name'],
                 $planData['status'],
@@ -229,6 +295,38 @@ class SuccessionPlanning {
                 $planData['success_metrics'],
                 $planData['created_by']
             ]);
+            
+            if ($result) {
+                $planId = $this->db->lastInsertId();
+                
+                // Get creator and role names for notification
+                $creatorStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $creatorStmt->execute([$planData['created_by']]);
+                $creator = $creatorStmt->fetch();
+                $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'System';
+                
+                $roleStmt = $this->db->prepare("SELECT position_title FROM critical_positions WHERE id = ?");
+                $roleStmt->execute([$planData['role_id']]);
+                $role = $roleStmt->fetch();
+                $roleTitle = $role ? $role['position_title'] : 'Unknown Role';
+                
+                // Notify succession managers
+                $this->notificationManager->notifySuccessionManagers(
+                    'plan_created',
+                    [
+                        'plan_name' => $planData['plan_name'],
+                        'role_title' => $roleTitle,
+                        'status' => $planData['status'],
+                        'created_by' => $creatorName
+                    ],
+                    $planId,
+                    'succession_plan',
+                    '?page=succession_planning&action=view_plan&id=' . $planId,
+                    true
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error creating succession plan: " . $e->getMessage());
             return false;

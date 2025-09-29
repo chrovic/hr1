@@ -15,6 +15,35 @@ if (!$auth->isLoggedIn()) {
 $current_user = $auth->getCurrentUser();
 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
+// Role-based page access control before any processing
+// Define allowed pages per role
+$roleToPages = [
+	'admin' => '*',
+	'hr_manager' => '*',
+	'competency_manager' => [
+		'competency', 'competency_models', 'evaluation_cycles', 'evaluations', 'competency_reports', 'ai_analysis_dashboard', 'dashboard'
+	],
+	'learning_training_manager' => [
+		'learning_management', 'learning_management_enhanced', 'training_management', 'training_requests', 'training_feedback_management', 'hr_learning_requests', 'dashboard'
+	],
+	'succession_manager' => [
+		'succession_planning', 'dashboard'
+	],
+	'employee' => [
+		'dashboard', 'employee_self_service', 'employee_profile', 'employee_portal', 'my_evaluations', 'my_trainings', 'my_requests', 'employee_learning_materials', 'employee_learning_access', 'employee_training_requests'
+	]
+];
+
+$role = $_SESSION['role'] ?? 'employee';
+if (isset($roleToPages[$role])) {
+	$allowed = $roleToPages[$role];
+	if ($allowed !== '*' && !in_array($page, $allowed, true)) {
+		// Redirect to dashboard if page not allowed for this role
+		header('Location: ?page=dashboard');
+		exit;
+	}
+}
+
 // Check terms acceptance
 $conn = getDB();
 $termsAcceptance = new TermsAcceptance($conn);
@@ -277,8 +306,8 @@ if ($page === 'training_management' && $_POST) {
                         true
                     );
                     
-                    // Notify HR managers about the feedback submission
-                    $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager') AND status = 'active'");
+                    // Notify learning stakeholders (admins, HR, learning & training managers)
+                    $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager', 'learning_training_manager') AND status = 'active'");
                     $stmt->execute();
                     $hrUsers = $stmt->fetchAll();
                     
@@ -360,6 +389,322 @@ if ($page === 'training_management' && $_POST) {
         if ($learningManager->enrollEmployee($enrollmentData)) {
             $auth->logActivity('enroll_employee', 'training_enrollments', null, null, $enrollmentData);
             header('Location: ?page=training_management&success=employee_enrolled');
+            exit;
+        }
+    }
+}
+
+// Handle succession planning form processing BEFORE any HTML output (PRG-safe)
+if ($page === 'succession_planning' && $_POST) {
+    require_once 'includes/functions/succession_planning.php';
+    require_once 'includes/functions/notification_manager.php';
+
+    $successionManager = new SuccessionPlanning();
+    $notificationManager = new NotificationManager();
+    $db = getDB();
+
+    // Create Critical Role
+    if (isset($_POST['create_role'])) {
+        $roleData = [
+            'position_title' => $_POST['position_title'],
+            'department' => $_POST['department'],
+            'level' => $_POST['level'] ?? null,
+            'description' => $_POST['description'],
+            'requirements' => $_POST['requirements'] ?? null,
+            'risk_level' => $_POST['risk_level'] ?? 'medium',
+            'current_incumbent_id' => $_POST['current_incumbent_id'] ?: null,
+            'created_by' => $current_user['id']
+        ];
+
+        if ($successionManager->createCriticalRole($roleData)) {
+            $auth->logActivity('create_critical_role', 'critical_roles', null, null, $roleData);
+
+            // Notify HR and Succession Managers
+            try {
+                $notificationManager->notifySuccessionManagers(
+                    'model_created',
+                    [
+                        'role_title' => $roleData['position_title'],
+                        'department' => $roleData['department'],
+                        'risk_level' => $roleData['risk_level'],
+                        'created_by' => $current_user['first_name'] . ' ' . $current_user['last_name']
+                    ],
+                    null,
+                    'model',
+                    '?page=succession_planning',
+                    true
+                );
+            } catch (Exception $e) { /* ignore */ }
+
+            header('Location: ?page=succession_planning&success=role_created');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=role_create_failed');
+            exit;
+        }
+    }
+
+    // Assign Candidate
+    if (isset($_POST['assign_candidate'])) {
+        $candidateData = [
+            'role_id' => $_POST['role_id'],
+            'employee_id' => $_POST['employee_id'],
+            'readiness_level' => $_POST['readiness_level'],
+            'development_plan' => $_POST['development_plan'],
+            'notes' => $_POST['notes'],
+            'assessment_date' => $_POST['assessment_date'],
+            'next_review_date' => $_POST['next_review_date'],
+            'assigned_by' => $current_user['id']
+        ];
+
+        if ($successionManager->assignCandidate($candidateData)) {
+            $auth->logActivity('assign_succession_candidate', 'succession_candidates', null, null, $candidateData);
+
+            // Notifications
+            try {
+                // Employee
+                $stmt = $db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $stmt->execute([$candidateData['employee_id']]);
+                $emp = $stmt->fetch();
+                $employeeName = $emp ? ($emp['first_name'] . ' ' . $emp['last_name']) : 'Employee';
+
+                $stmt = $db->prepare("SELECT position_title, department FROM critical_positions WHERE id = ?");
+                $stmt->execute([$candidateData['role_id']]);
+                $role = $stmt->fetch();
+                $roleTitle = $role ? $role['position_title'] : 'Critical Role';
+                $roleDept = $role ? $role['department'] : '';
+
+                $notificationManager->createNotification(
+                    $candidateData['employee_id'],
+                    'evaluation_assigned',
+                    'Succession Candidate Assignment',
+                    $current_user['first_name'] . ' ' . $current_user['last_name'] . ' assigned you as a succession candidate for "' . $roleTitle . '" ' . ($roleDept ? '(' . $roleDept . ')' : '') . '.',
+                    null,
+                    null,
+                    '?page=succession_planning',
+                    true
+                );
+
+                // Notify HR and Succession Managers
+                $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager', 'succession_manager') AND status = 'active'");
+                $stmt->execute();
+                $hrUsers = $stmt->fetchAll();
+                
+                foreach ($hrUsers as $hrUser) {
+                    $notificationManager->createNotification(
+                        $hrUser['id'],
+                        'evaluation_assigned',
+                        'Succession Candidate Assigned',
+                        $current_user['first_name'] . ' ' . $current_user['last_name'] . ' assigned ' . $employeeName . ' as a succession candidate for "' . $roleTitle . '" ' . ($roleDept ? '(' . $roleDept . ')' : '') . '.',
+                        null,
+                        null,
+                        '?page=succession_planning',
+                        true
+                    );
+                }
+            } catch (Exception $e) { /* ignore */ }
+
+            header('Location: ?page=succession_planning&success=candidate_assigned');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=candidate_assign_failed');
+            exit;
+        }
+    }
+
+    // Update Critical Role
+    if (isset($_POST['update_role'])) {
+        $roleId = $_POST['role_id'];
+        $updateData = [
+            'position_title' => $_POST['position_title'],
+            'department' => $_POST['department'],
+            'level' => $_POST['level'] ?? null,
+            'description' => $_POST['description'] ?? null,
+            'requirements' => $_POST['requirements'] ?? null,
+            'risk_level' => $_POST['risk_level'] ?? 'medium',
+            'current_incumbent_id' => $_POST['current_incumbent_id'] ?: null,
+        ];
+
+        if ($successionManager->updateCriticalRole($roleId, $updateData)) {
+            $auth->logActivity('update_critical_role', 'critical_positions', $roleId, null, $updateData);
+            // Notify HR and Succession Managers about update
+            try {
+                $notificationManager->notifySuccessionManagers(
+                    'model_updated',
+                    [
+                        'role_title' => $updateData['position_title'],
+                        'department' => $updateData['department'],
+                        'risk_level' => $updateData['risk_level'],
+                        'updated_by' => $current_user['first_name'] . ' ' . $current_user['last_name']
+                    ],
+                    $roleId,
+                    'model',
+                    '?page=succession_planning',
+                    true
+                );
+            } catch (Exception $e) { /* ignore */ }
+            header('Location: ?page=succession_planning&success=role_updated');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=role_update_failed');
+            exit;
+        }
+    }
+
+    // Update Candidate
+    if (isset($_POST['update_candidate'])) {
+        $candidateId = $_POST['candidate_id'];
+        $updateData = [
+            'readiness_level' => $_POST['readiness_level'],
+            'development_plan' => $_POST['development_plan'],
+            'notes' => $_POST['notes'],
+            'assessment_date' => $_POST['assessment_date'],
+            'next_review_date' => $_POST['next_review_date']
+        ];
+
+        if ($successionManager->updateCandidateReadiness($candidateId, $updateData)) {
+            $auth->logActivity('update_candidate_readiness', 'succession_candidates', $candidateId, null, $updateData);
+
+            // Notifications
+            try {
+                $stmt = $db->prepare("SELECT sc.employee_id, u.first_name, u.last_name, cr.position_title
+                                       FROM succession_candidates sc
+                                       JOIN users u ON sc.employee_id = u.id
+                                       JOIN critical_positions cr ON sc.role_id = cr.id
+                                       WHERE sc.id = ?");
+                $stmt->execute([$candidateId]);
+                if ($row = $stmt->fetch()) {
+                    $employeeId = $row['employee_id'];
+                    $employeeName = $row['first_name'] . ' ' . $row['last_name'];
+                    $roleTitle = $row['position_title'];
+                    $msg = 'Succession record updated for "' . $roleTitle . '". Readiness: ' . $updateData['readiness_level'] . '.';
+
+                    $notificationManager->createNotification(
+                        $employeeId,
+                        'evaluation_completed',
+                        'Succession Candidate Updated',
+                        $msg,
+                        null,
+                        'succession',
+                        '?page=succession_planning',
+                        true
+                    );
+
+                    // Notify HR and Succession Managers
+                    $notificationManager->notifySuccessionManagers(
+                        'evaluation_completed',
+                        [
+                            'employee_name' => $employeeName,
+                            'role_title' => $roleTitle,
+                            'readiness_level' => $updateData['readiness_level'],
+                            'updated_by' => $current_user['first_name'] . ' ' . $current_user['last_name']
+                        ],
+                        $candidateId,
+                        'evaluation',
+                        '?page=succession_planning',
+                        true
+                    );
+                }
+            } catch (Exception $e) { /* ignore */ }
+
+            header('Location: ?page=succession_planning&success=candidate_updated');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=candidate_update_failed');
+            exit;
+        }
+    }
+
+    // Remove Candidate
+    if (isset($_POST['remove_candidate'])) {
+        $candidateId = $_POST['candidate_id'];
+        if ($successionManager->removeCandidate($candidateId)) {
+            $auth->logActivity('remove_succession_candidate', 'succession_candidates', $candidateId, null, null);
+
+            try {
+                $employeeId = $_POST['employee_id'] ?? null;
+                if ($employeeId) {
+                    $stmt = $db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                    $stmt->execute([$employeeId]);
+                    $emp = $stmt->fetch();
+                    $employeeName = $emp ? ($emp['first_name'] . ' ' . $emp['last_name']) : 'Employee';
+
+                    $notificationManager->createNotification(
+                        $employeeId,
+                        'model_deleted',
+                        'Removed from Succession Planning',
+                        $current_user['first_name'] . ' ' . $current_user['last_name'] . ' removed you from a succession pipeline.',
+                        null,
+                        null,
+                        '?page=succession_planning',
+                        true
+                    );
+
+                    // Notify HR and Succession Managers
+                    $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager', 'succession_manager') AND status = 'active'");
+                    $stmt->execute();
+                    $hrUsers = $stmt->fetchAll();
+                    
+                    foreach ($hrUsers as $hrUser) {
+                        $notificationManager->createNotification(
+                            $hrUser['id'],
+                            'model_deleted',
+                            'Succession Candidate Removed',
+                            $current_user['first_name'] . ' ' . $current_user['last_name'] . ' removed ' . $employeeName . ' from a succession pipeline.',
+                            $candidateId,
+                            'model',
+                            '?page=succession_planning',
+                            true
+                        );
+                    }
+                }
+            } catch (Exception $e) { /* ignore */ }
+
+            header('Location: ?page=succession_planning&success=candidate_removed');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=candidate_remove_failed');
+            exit;
+        }
+    }
+
+    // Delete Critical Role
+    if (isset($_POST['delete_role'])) {
+        $roleId = $_POST['role_id'];
+        if ($successionManager->deleteCriticalRole($roleId)) {
+            $auth->logActivity('delete_critical_role', 'critical_positions', $roleId, null, null);
+
+            // Notify HR and Succession Managers
+            try {
+                // Get role details for notification
+                $stmt = $db->prepare("SELECT position_title, department FROM critical_positions WHERE id = ?");
+                $stmt->execute([$roleId]);
+                $role = $stmt->fetch();
+                $roleTitle = $role ? $role['position_title'] : 'Critical Role';
+                $roleDept = $role ? $role['department'] : '';
+                
+                $stmt = $db->prepare("SELECT id FROM users WHERE role IN ('admin', 'hr_manager', 'succession_manager') AND status = 'active'");
+                $stmt->execute();
+                $hrUsers = $stmt->fetchAll();
+                
+                foreach ($hrUsers as $hrUser) {
+                    $notificationManager->createNotification(
+                        $hrUser['id'],
+                        'model_deleted',
+                        'Critical Role Deleted',
+                        $current_user['first_name'] . ' ' . $current_user['last_name'] . ' deleted the critical role "' . $roleTitle . '" ' . ($roleDept ? '(' . $roleDept . ')' : '') . '.',
+                        $roleId,
+                        'model',
+                        '?page=succession_planning',
+                        true
+                    );
+                }
+            } catch (Exception $e) { /* ignore */ }
+
+            header('Location: ?page=succession_planning&success=role_deleted');
+            exit;
+        } else {
+            header('Location: ?page=succession_planning&error=role_delete_failed');
             exit;
         }
     }

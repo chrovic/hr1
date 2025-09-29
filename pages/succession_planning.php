@@ -5,7 +5,7 @@ require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/succession_planning.php';
 
 $auth = new SimpleAuth();
-if (!$auth->isLoggedIn() || !$auth->hasPermission('manage_evaluations')) {
+if (!$auth->isLoggedIn() || !$auth->hasPermission('manage_succession')) {
     header('Location: auth/login.php');
     exit;
 }
@@ -16,77 +16,43 @@ $successionManager = new SuccessionPlanning();
 $message = '';
 $error = '';
 
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['create_role'])) {
-        $roleData = [
-            'position_title' => $_POST['position_title'],
-            'department' => $_POST['department'],
-            'level' => $_POST['level'],
-            'description' => $_POST['description'],
-            'requirements' => $_POST['requirements'],
-            'risk_level' => $_POST['risk_level'],
-            'current_incumbent_id' => $_POST['current_incumbent_id'] ?: null,
-            'created_by' => $current_user['id']
-        ];
-        
-        if ($successionManager->createCriticalRole($roleData)) {
-            $message = 'Critical role created successfully!';
-            $auth->logActivity('create_critical_role', 'critical_roles', null, null, $roleData);
-        } else {
-            $error = 'Failed to create critical role.';
+// Map success/error query params to user-friendly messages (PRG pattern)
+if (!empty($_GET)) {
+    if (isset($_GET['success'])) {
+        switch ($_GET['success']) {
+            case 'role_created':
+                $message = 'Critical role created successfully!';
+                break;
+            case 'candidate_assigned':
+                $message = 'Succession candidate assigned successfully!';
+                break;
+            case 'candidate_updated':
+                $message = 'Candidate readiness updated successfully!';
+                break;
+            case 'candidate_removed':
+                $message = 'Candidate removed from succession planning successfully!';
+                break;
         }
     }
-    
-    if (isset($_POST['assign_candidate'])) {
-        $candidateData = [
-            'role_id' => $_POST['role_id'],
-            'employee_id' => $_POST['employee_id'],
-            'readiness_level' => $_POST['readiness_level'],
-            'development_plan' => $_POST['development_plan'],
-            'notes' => $_POST['notes'],
-            'assessment_date' => $_POST['assessment_date'],
-            'next_review_date' => $_POST['next_review_date'],
-            'assigned_by' => $current_user['id']
-        ];
-        
-        if ($successionManager->assignCandidate($candidateData)) {
-            $message = 'Succession candidate assigned successfully!';
-            $auth->logActivity('assign_succession_candidate', 'succession_candidates', null, null, $candidateData);
-        } else {
-            $error = 'Failed to assign succession candidate.';
-        }
-    }
-    
-    if (isset($_POST['update_candidate'])) {
-        $candidateId = $_POST['candidate_id'];
-        $updateData = [
-            'readiness_level' => $_POST['readiness_level'],
-            'development_plan' => $_POST['development_plan'],
-            'notes' => $_POST['notes'],
-            'assessment_date' => $_POST['assessment_date'],
-            'next_review_date' => $_POST['next_review_date']
-        ];
-        
-        if ($successionManager->updateCandidateReadiness($candidateId, $updateData)) {
-            $message = 'Candidate readiness updated successfully!';
-            $auth->logActivity('update_candidate_readiness', 'succession_candidates', $candidateId, null, $updateData);
-        } else {
-            $error = 'Failed to update candidate readiness.';
-        }
-    }
-    
-    if (isset($_POST['remove_candidate'])) {
-        $candidateId = $_POST['candidate_id'];
-        
-        if ($successionManager->removeCandidate($candidateId)) {
-            $message = 'Candidate removed from succession planning successfully!';
-            $auth->logActivity('remove_succession_candidate', 'succession_candidates', $candidateId, null, null);
-        } else {
-            $error = 'Failed to remove candidate.';
+    if (isset($_GET['error'])) {
+        switch ($_GET['error']) {
+            case 'role_create_failed':
+                $error = 'Failed to create critical role.';
+                break;
+            case 'candidate_assign_failed':
+                $error = 'Failed to assign succession candidate.';
+                break;
+            case 'candidate_update_failed':
+                $error = 'Failed to update candidate readiness.';
+                break;
+            case 'candidate_remove_failed':
+                $error = 'Failed to remove candidate.';
+                break;
         }
     }
 }
+
+// Note: Succession Planning POST handling and redirects are processed in index.php (PRG-safe)
 
 $criticalRoles = $successionManager->getAllCriticalRoles();
 $successionCandidates = $successionManager->getAllCandidates();
@@ -166,8 +132,17 @@ $availableEmployees = $successionManager->getAvailableEmployees();
                                         <td>
                                             <span class="badge badge-secondary"><?php echo htmlspecialchars($role['department']); ?></span>
                                         </td>
-                                        <td>
-                                            <span class="badge badge-info"><?php echo ucfirst($role['level']); ?></span>
+                                    <td>
+                                            <?php 
+                                            $displayLevel = isset($role['level']) && $role['level'] !== '' 
+                                                ? $role['level'] 
+                                                : (isset($role['priority_level']) && $role['priority_level'] !== '' ? $role['priority_level'] : null);
+                                            ?>
+                                            <?php if ($displayLevel !== null): ?>
+                                                <span class="badge badge-info"><?php echo htmlspecialchars(ucfirst((string)$displayLevel)); ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">—</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php
@@ -199,13 +174,17 @@ $availableEmployees = $successionManager->getAvailableEmployees();
                                                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRole(<?php echo $role['id']; ?>)">
                                                     <i class="fe fe-eye fe-14"></i>
                                                 </button>
-                                                <button type="button" class="btn btn-sm btn-outline-success" onclick="viewCandidates(<?php echo $role['id']; ?>)">
-                                                    <i class="fe fe-users fe-14"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="editRole(<?php echo htmlspecialchars(json_encode($role)); ?>)">
+                                                
+                                                <button type="button" class="btn btn-sm btn-outline-warning" data-toggle="modal" data-target="#editRoleModal" onclick='editRole(<?php echo json_encode($role, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>)'>
                                                     <i class="fe fe-edit fe-14"></i>
                                                 </button>
-                    </div>
+                                                <form method="POST" onsubmit="return confirm('Delete this critical role? This cannot be undone.');" style="display:inline-block; margin-left:4px;">
+                                                    <input type="hidden" name="role_id" value="<?php echo (int)$role['id']; ?>">
+                                                    <button type="submit" name="delete_role" class="btn btn-sm btn-outline-danger">
+                                                        <i class="fe fe-trash fe-14"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -214,6 +193,90 @@ $availableEmployees = $successionManager->getAvailableEmployees();
                     </div>
                 <?php endif; ?>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Role Modal -->
+<div class="modal fade" id="viewRoleModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Role Details</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="viewRoleModalBody"></div>
+        </div>
+    </div>
+    </div>
+
+<!-- View Candidates Modal -->
+<div class="modal fade" id="viewCandidatesModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Role Candidates</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="viewCandidatesModalBody"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div class="modal fade" id="editRoleModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Critical Role</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_role_id" name="role_id">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="edit_position_title">Position Title</label>
+                            <input type="text" class="form-control" id="edit_position_title" name="position_title" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="edit_department">Department</label>
+                            <input type="text" class="form-control" id="edit_department" name="department" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="edit_level">Level</label>
+                            <input type="text" class="form-control" id="edit_level" name="level">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="edit_risk_level">Risk Level</label>
+                            <select class="form-control" id="edit_risk_level" name="risk_level">
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="edit_current_incumbent_id">Current Incumbent (User ID)</label>
+                            <input type="number" class="form-control" id="edit_current_incumbent_id" name="current_incumbent_id">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_description">Description</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_requirements">Requirements</label>
+                        <textarea class="form-control" id="edit_requirements" name="requirements" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_role" class="btn btn-primary">Update Role</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -560,11 +623,23 @@ $availableEmployees = $successionManager->getAvailableEmployees();
 
 <script>
 function viewRole(roleId) {
-    window.location.href = '?page=critical_role_details&id=' + roleId;
+    const body = document.getElementById('viewRoleModalBody');
+    body.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"></div><div class="mt-2">Loading...</div></div>';
+    $('#viewRoleModal').modal('show');
+    fetch('ajax/succession_role_details.php?id=' + encodeURIComponent(roleId), { credentials: 'same-origin' })
+        .then(r => r.text())
+        .then(html => { body.innerHTML = html; })
+        .catch(() => { body.innerHTML = '<div class="alert alert-danger m-3">Failed to load role details.</div>'; });
 }
 
 function viewCandidates(roleId) {
-    window.location.href = '?page=succession_candidates&role_id=' + roleId;
+    const body = document.getElementById('viewCandidatesModalBody');
+    body.innerHTML = '<div class="text-center p-4"><div class="spinner-border" role="status"></div><div class="mt-2">Loading...</div></div>';
+    $('#viewCandidatesModal').modal('show');
+    fetch('ajax/succession_role_candidates.php?role_id=' + encodeURIComponent(roleId), { credentials: 'same-origin' })
+        .then(r => r.text())
+        .then(html => { body.innerHTML = html; })
+        .catch(() => { body.innerHTML = '<div class="alert alert-danger m-3">Failed to load candidates.</div>'; });
 }
 
 function viewCandidate(candidateId) {

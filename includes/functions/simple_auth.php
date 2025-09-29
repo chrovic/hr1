@@ -89,6 +89,17 @@ class SimpleAuth {
                 'approve_requests', 'view_learning_progress', 'manage_succession_plans',
                 'view_performance_data', 'manage_employee_development'
             ],
+            // New granular manager roles
+            'competency_manager' => [
+                'manage_competencies', 'manage_competency_models', 'manage_evaluation_cycles',
+                'manage_evaluations', 'view_reports'
+            ],
+            'learning_training_manager' => [
+                'manage_learning', 'manage_training', 'view_learning_progress', 'view_reports'
+            ],
+            'succession_manager' => [
+                'manage_succession', 'manage_succession_plans', 'view_reports'
+            ],
             'employee' => [
                 'view_own_data', 'submit_requests', 'view_own_evaluations', 'view_own_trainings',
                 'update_profile', 'view_own_competencies', 'request_training', 'view_announcements'
@@ -111,6 +122,19 @@ class SimpleAuth {
     // Check if user is Employee
     public function isEmployee() {
         return $this->isLoggedIn() && $_SESSION['role'] === 'employee';
+    }
+
+    // New helper methods for manager roles
+    public function isCompetencyManager() {
+        return $this->isLoggedIn() && $_SESSION['role'] === 'competency_manager';
+    }
+
+    public function isLearningTrainingManager() {
+        return $this->isLoggedIn() && $_SESSION['role'] === 'learning_training_manager';
+    }
+
+    public function isSuccessionManager() {
+        return $this->isLoggedIn() && $_SESSION['role'] === 'succession_manager';
     }
     
     // Get user role
@@ -185,6 +209,22 @@ class SimpleAuth {
                 $data['can_manage_evaluations'] = true;
                 $data['can_manage_competencies'] = true;
                 $data['can_manage_learning'] = true;
+                $data['can_manage_succession'] = true;
+                $data['can_view_hr_reports'] = true;
+                break;
+            
+            case 'competency_manager':
+                $data['can_manage_competencies'] = true;
+                $data['can_view_hr_reports'] = true;
+                break;
+
+            case 'learning_training_manager':
+                $data['can_manage_learning'] = true;
+                $data['can_manage_training'] = true;
+                $data['can_view_hr_reports'] = true;
+                break;
+
+            case 'succession_manager':
                 $data['can_manage_succession'] = true;
                 $data['can_view_hr_reports'] = true;
                 break;

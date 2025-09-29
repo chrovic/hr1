@@ -31,7 +31,8 @@ class LearningManager {
         if ($result) {
             $courseId = $this->db->lastInsertId();
             try {
-                $this->notificationManager->notifyHRManagers('course_created', [
+                // Notify learning stakeholders including learning & training managers
+                $this->notificationManager->notifyLearningManagers('course_created', [
                     'course_title' => $trainingData['title'],
                     'created_by' => $this->getUserName($trainingData['created_by'])
                 ], $courseId, 'course', '?page=learning_management', true);
@@ -153,7 +154,7 @@ class LearningManager {
         // Send notification if session was created successfully
         if ($result) {
             $sessionId = $this->db->lastInsertId();
-            $this->notificationManager->notifyHRManagers('session_created', [
+            $this->notificationManager->notifyLearningManagers('session_created', [
                 'session_name' => $sessionData['session_name'] ?? 'Training Session',
                 'created_by' => $this->getUserName($sessionData['created_by'])
             ], $sessionId, 'session', '?page=training_management', true);
@@ -316,15 +317,15 @@ class LearningManager {
                         'score' => $score ?? 'N/A'
                     ], $enrollment_id, 'enrollment', '?page=my_trainings', true);
                     
-                    // Notify HR managers
-                    $this->notificationManager->notifyHRManagers('training_completed', [
+                    // Notify learning stakeholders
+                    $this->notificationManager->notifyLearningManagers('training_completed', [
                         'course_title' => $enrollment['course_title'],
                         'employee_name' => $this->getUserName($enrollment['employee_id']),
                         'score' => $score ?? 'N/A'
                     ], $enrollment_id, 'enrollment', '?page=training_management', true);
                 } elseif ($completion_status === 'failed') {
-                    // Notify HR managers about failure
-                    $this->notificationManager->notifyHRManagers('training_failed', [
+                    // Notify learning stakeholders about failure
+                    $this->notificationManager->notifyLearningManagers('training_failed', [
                         'course_title' => $enrollment['course_title'],
                         'employee_name' => $this->getUserName($enrollment['employee_id'])
                     ], $enrollment_id, 'enrollment', '?page=training_management', true);
@@ -698,7 +699,7 @@ class LearningManager {
         
         // Send notification if training was deleted successfully
         if ($result && $deletedBy && $training) {
-            $this->notificationManager->notifyHRManagers('course_deleted', [
+            $this->notificationManager->notifyLearningManagers('course_deleted', [
                 'course_title' => $training['title'],
                 'deleted_by' => $this->getUserName($deletedBy)
             ], $trainingId, 'course', '?page=learning_management', true);

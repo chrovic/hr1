@@ -1,6 +1,11 @@
 <?php
 // Fixed notification dropdown that bypasses the NotificationManager issue
 try {
+    // Safety check - only proceed if user is properly authenticated
+    if (!isset($current_user) || !isset($current_user['id'])) {
+        throw new Exception("User not authenticated");
+    }
+    
     require_once 'includes/functions/notification_manager.php';
     $notificationManager = new NotificationManager();
     
@@ -12,8 +17,7 @@ try {
     
     $unreadCount = $notificationManager->getUnreadCount($current_user['id']);
     
-    // Debug information
-    error_log("Notification Debug: User ID = {$current_user['id']}, Notifications = " . count($notifications) . ", Unread = $unreadCount");
+    // Debug information removed to prevent header issues
     ?>
     <!-- Notification Dropdown -->
     <div class="dropdown">
@@ -42,7 +46,7 @@ try {
                 <div class="text-center py-3 text-muted">
                     <i class="fe fe-bell-off fe-24 mb-2"></i>
                     <p class="mb-0">No notifications</p>
-                    <small class="text-muted">Debug: User ID = <?php echo $current_user['id']; ?>, Count = <?php echo count($notifications); ?></small>
+                    <!-- Debug information removed -->
                 </div>
             <?php else: ?>
                 <?php foreach ($notifications as $notification): ?>
@@ -114,6 +118,9 @@ try {
                                     <div class="unread-indicator"></div>
                                 </div>
                             <?php endif; ?>
+                            <button class="btn btn-sm btn-link text-danger" title="Delete" onclick="event.stopPropagation(); deleteNotification(<?php echo $notification['id']; ?>)">
+                                <span class="fe fe-trash-2"></span>
+                            </button>
                         </div>
                     </div>
                     <div class="dropdown-divider"></div>
@@ -317,6 +324,27 @@ try {
             console.error('Error updating unread count:', error);
         });
     }
+
+    function deleteNotification(notificationId) {
+        fetch('ajax/delete_notification.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_id: notificationId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const item = document.querySelector(`[data-notification-id="${notificationId}"]`);
+                if (item) {
+                    const divider = item.nextElementSibling;
+                    item.remove();
+                    if (divider && divider.classList.contains('dropdown-divider')) divider.remove();
+                }
+                updateUnreadCount();
+            }
+        })
+        .catch(err => console.error('Delete notification failed', err));
+    }
     
     // Auto-refresh notifications every 30 seconds
     setInterval(function() {
@@ -400,9 +428,11 @@ try {
     <?php
 } catch (Exception $e) {
     // Fallback notification bell if widget fails
-    echo '<a class="nav-link text-muted my-2" href="?page=notifications">
-            <span class="fe fe-bell fe-16"></span>
-          </a>';
+    ?>
+    <a class="nav-link text-muted my-2" href="?page=notifications">
+        <span class="fe fe-bell fe-16"></span>
+    </a>
+    <?php
     error_log("Notification widget error: " . $e->getMessage());
 }
 ?>

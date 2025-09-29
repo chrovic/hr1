@@ -323,6 +323,40 @@ if ($current_user['role'] === 'employee') {
     }
 }
 
+// Competency Manager specific stats and notifications
+$cmStats = [
+	'total_models' => 0,
+	'active_cycles' => 0,
+	'pending_evaluations' => 0
+];
+$cmNotifications = [];
+
+if ($auth->isCompetencyManager()) {
+	try {
+		$stmt = $db->prepare("SELECT COUNT(*) as count FROM competency_models");
+		$stmt->execute();
+		$cmStats['total_models'] = $stmt->fetch()['count'] ?? 0;
+	} catch (PDOException $e) { $cmStats['total_models'] = 0; }
+
+	try {
+		$stmt = $db->prepare("SELECT COUNT(*) as count FROM evaluation_cycles");
+		$stmt->execute();
+		$cmStats['active_cycles'] = $stmt->fetch()['count'] ?? 0;
+	} catch (PDOException $e) { $cmStats['active_cycles'] = 0; }
+
+	try {
+		$stmt = $db->prepare("SELECT COUNT(*) as count FROM evaluations WHERE status IN ('pending','in_progress')");
+		$stmt->execute();
+		$cmStats['pending_evaluations'] = $stmt->fetch()['count'] ?? 0;
+	} catch (PDOException $e) { $cmStats['pending_evaluations'] = 0; }
+
+	try {
+		$stmt = $db->prepare("SELECT id, title, message, created_at, action_url FROM competency_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+		$stmt->execute([$current_user['id']]);
+		$cmNotifications = $stmt->fetchAll();
+	} catch (PDOException $e) { $cmNotifications = []; }
+}
+
 // Get announcements for admin
 $announcements = [];
 if ($auth->hasPermission('manage_system')) {
@@ -803,6 +837,451 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 </script>
+
+<?php elseif ($auth->isCompetencyManager()): ?>
+<!-- Competency Manager Dashboard Content -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-primary"><span class="fe fe-target fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Competency Models</div>
+                    <div class="h3 mb-0"><?php echo (int)$cmStats['total_models']; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-info"><span class="fe fe-bar-chart-2 fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Evaluation Cycles</div>
+                    <div class="h3 mb-0"><?php echo (int)$cmStats['active_cycles']; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-warning"><span class="fe fe-clipboard fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Pending Evaluations</div>
+                    <div class="h3 mb-0"><?php echo (int)$cmStats['pending_evaluations']; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong class="card-title">Recent Competency Notifications</strong>
+                <a href="?page=competency_models" class="btn btn-sm btn-primary">Go to Models</a>
+            </div>
+            <div class="card-body">
+                <?php if (empty($cmNotifications)): ?>
+                    <div class="text-center text-muted py-4">
+                        <i class="fe fe-bell fe-48 mb-2"></i>
+                        <div>No recent notifications.</div>
+                    </div>
+                <?php else: ?>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($cmNotifications as $n): ?>
+                            <a href="<?php echo htmlspecialchars($n['action_url'] ?? '#'); ?>" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1"><?php echo htmlspecialchars($n['title']); ?></h6>
+                                    <small class="text-muted"><?php echo timeAgo($n['created_at']); ?></small>
+                                </div>
+                                <p class="mb-1 text-muted small"><?php echo htmlspecialchars($n['message']); ?></p>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <strong class="card-title">Quick Actions</strong>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6 mb-3"><a href="?page=competency_models" class="btn btn-outline-primary btn-block"><span class="fe fe-target mr-2"></span>Models</a></div>
+                    <div class="col-6 mb-3"><a href="?page=evaluation_cycles" class="btn btn-outline-secondary btn-block"><span class="fe fe-bar-chart-2 mr-2"></span>Cycles</a></div>
+                    <div class="col-6 mb-3"><a href="?page=evaluations" class="btn btn-outline-info btn-block"><span class="fe fe-clipboard mr-2"></span>Evaluations</a></div>
+                    <div class="col-6 mb-3"><a href="?page=competency_reports" class="btn btn-outline-success btn-block"><span class="fe fe-pie-chart mr-2"></span>Reports</a></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php elseif ($auth->isLearningTrainingManager()): ?>
+<!-- Learning & Training Manager Dashboard Content -->
+<?php
+// Get learning and training statistics
+require_once 'includes/functions/learning.php';
+$learningManager = new LearningManager();
+
+$allTrainings = $learningManager->getAllTrainings();
+$activeTrainings = array_filter($allTrainings, function($training) {
+    return $training['status'] === 'active';
+});
+
+$totalCourses = count($activeTrainings);
+$totalSessions = 0;
+$totalEnrollments = 0;
+
+// Get session and enrollment counts
+$stmt = $db->prepare("SELECT COUNT(*) as session_count FROM training_sessions WHERE status = 'active'");
+$stmt->execute();
+$sessionResult = $stmt->fetch();
+$totalSessions = $sessionResult['session_count'];
+
+$stmt = $db->prepare("SELECT COUNT(*) as enrollment_count FROM training_enrollments WHERE status IN ('enrolled', 'completed')");
+$stmt->execute();
+$enrollmentResult = $stmt->fetch();
+$totalEnrollments = $enrollmentResult['enrollment_count'];
+?>
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-primary"><span class="fe fe-book fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Training Courses</div>
+                    <div class="h3 mb-0"><?php echo $totalCourses; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-success"><span class="fe fe-calendar fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Training Sessions</div>
+                    <div class="h3 mb-0"><?php echo $totalSessions; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-info"><span class="fe fe-users fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Total Enrollments</div>
+                    <div class="h3 mb-0"><?php echo $totalEnrollments; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-warning"><span class="fe fe-trending-up fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Active Programs</div>
+                    <div class="h3 mb-0"><?php echo $totalCourses; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Learning Management Overview -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-bar-chart-2 mr-2"></i>Training Program Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="text-primary">
+                            <span class="fe fe-book fe-48"></span>
+                            <h4 class="mt-2"><?php echo $totalCourses; ?></h4>
+                            <p class="text-muted">Active Courses</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-success">
+                            <span class="fe fe-calendar fe-48"></span>
+                            <h4 class="mt-2"><?php echo $totalSessions; ?></h4>
+                            <p class="text-muted">Scheduled Sessions</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-info">
+                            <span class="fe fe-users fe-48"></span>
+                            <h4 class="mt-2"><?php echo $totalEnrollments; ?></h4>
+                            <p class="text-muted">Total Enrollments</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-activity mr-2"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="?page=learning_management" class="btn btn-primary">
+                        <i class="fe fe-plus mr-2"></i>Create Course
+                    </a>
+                    <a href="?page=training_management" class="btn btn-outline-primary">
+                        <i class="fe fe-calendar mr-2"></i>Schedule Session
+                    </a>
+                    <a href="?page=learning_management" class="btn btn-outline-secondary">
+                        <i class="fe fe-bar-chart-2 mr-2"></i>View Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Learning Activities -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-bell mr-2"></i>Recent Learning Notifications</h5>
+            </div>
+            <div class="card-body">
+                <?php
+                // Get recent learning notifications
+                $stmt = $db->prepare("
+                    SELECT * FROM competency_notifications 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC 
+                    LIMIT 5
+                ");
+                $stmt->execute([$current_user['id']]);
+                $notifications = $stmt->fetchAll();
+                
+                if (empty($notifications)): ?>
+                    <div class="text-center py-4 text-muted">
+                        <i class="fe fe-bell-off fe-48 mb-3"></i>
+                        <p>No recent notifications</p>
+                    </div>
+                <?php else: ?>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($notifications as $notification): ?>
+                            <div class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                    <div class="text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                    <small class="text-muted"><?php echo date('M j, g:i A', strtotime($notification['created_at'])); ?></small>
+                                </div>
+                                <?php if (!$notification['is_read']): ?>
+                                    <span class="badge bg-primary rounded-pill">New</span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php elseif ($auth->isSuccessionManager()): ?>
+<!-- Succession Manager Dashboard Content -->
+<?php
+// Get succession planning statistics
+require_once 'includes/functions/succession_planning.php';
+$successionManager = new SuccessionPlanning();
+
+$criticalRoles = $successionManager->getAllCriticalRoles();
+$successionCandidates = $successionManager->getAllCandidates();
+
+$totalRoles = count($criticalRoles);
+$totalCandidates = count($successionCandidates);
+$readyNowCandidates = 0;
+$readySoonCandidates = 0;
+$developmentNeededCandidates = 0;
+
+foreach ($successionCandidates as $candidate) {
+    switch ($candidate['readiness_level']) {
+        case 'ready_now':
+            $readyNowCandidates++;
+            break;
+        case 'ready_soon':
+            $readySoonCandidates++;
+            break;
+        case 'development_needed':
+            $developmentNeededCandidates++;
+            break;
+    }
+}
+
+// Get high-risk roles
+$highRiskRoles = 0;
+foreach ($criticalRoles as $role) {
+    if ($role['risk_level'] === 'high') {
+        $highRiskRoles++;
+    }
+}
+?>
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-primary"><span class="fe fe-users fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Critical Roles</div>
+                    <div class="h3 mb-0"><?php echo $totalRoles; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-success"><span class="fe fe-user-check fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Succession Candidates</div>
+                    <div class="h3 mb-0"><?php echo $totalCandidates; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-warning"><span class="fe fe-alert-triangle fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">High Risk Roles</div>
+                    <div class="h3 mb-0"><?php echo $highRiskRoles; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card shadow">
+            <div class="card-body d-flex align-items-center">
+                <div class="mr-3 text-info"><span class="fe fe-target fe-32"></span></div>
+                <div>
+                    <div class="text-muted small">Ready Now</div>
+                    <div class="h3 mb-0"><?php echo $readyNowCandidates; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Succession Planning Overview -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-bar-chart-2 mr-2"></i>Succession Pipeline Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="text-success">
+                            <span class="fe fe-check-circle fe-48"></span>
+                            <h4 class="mt-2"><?php echo $readyNowCandidates; ?></h4>
+                            <p class="text-muted">Ready Now</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-warning">
+                            <span class="fe fe-clock fe-48"></span>
+                            <h4 class="mt-2"><?php echo $readySoonCandidates; ?></h4>
+                            <p class="text-muted">Ready Soon</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="text-info">
+                            <span class="fe fe-trending-up fe-48"></span>
+                            <h4 class="mt-2"><?php echo $developmentNeededCandidates; ?></h4>
+                            <p class="text-muted">Development Needed</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-activity mr-2"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="?page=succession_planning" class="btn btn-primary">
+                        <i class="fe fe-plus mr-2"></i>Create Critical Role
+                    </a>
+                    <a href="?page=succession_planning" class="btn btn-outline-primary">
+                        <i class="fe fe-user-plus mr-2"></i>Assign Candidate
+                    </a>
+                    <a href="?page=succession_planning" class="btn btn-outline-secondary">
+                        <i class="fe fe-bar-chart-2 mr-2"></i>View Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Succession Activities -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fe fe-bell mr-2"></i>Recent Succession Notifications</h5>
+            </div>
+            <div class="card-body">
+                <?php
+                // Get recent succession notifications
+                $stmt = $db->prepare("
+                    SELECT * FROM competency_notifications 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC 
+                    LIMIT 5
+                ");
+                $stmt->execute([$current_user['id']]);
+                $notifications = $stmt->fetchAll();
+                
+                if (empty($notifications)): ?>
+                    <div class="text-center py-4 text-muted">
+                        <i class="fe fe-bell-off fe-48 mb-3"></i>
+                        <p>No recent notifications</p>
+                    </div>
+                <?php else: ?>
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($notifications as $notification): ?>
+                            <div class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                    <div class="text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                    <small class="text-muted"><?php echo date('M j, g:i A', strtotime($notification['created_at'])); ?></small>
+                                </div>
+                                <?php if (!$notification['is_read']): ?>
+                                    <span class="badge bg-primary rounded-pill">New</span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
 
 <?php else: ?>
 <!-- Admin/HR Manager Dashboard Content -->

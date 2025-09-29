@@ -59,8 +59,8 @@ class CompetencyManager {
             $creator = $creatorStmt->fetch();
             $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'Unknown';
             
-            // Notify HR managers and admins
-            $this->notificationManager->notifyHRManagers(
+            // Notify competency stakeholders (admins, HR managers, competency managers)
+            $this->notificationManager->notifyCompetencyManagers(
                 'model_created',
                 [
                     'model_name' => $modelData['name'],
@@ -141,8 +141,8 @@ class CompetencyManager {
             $model = $modelStmt->fetch();
             $modelName = $model ? $model['name'] : 'Unknown Model';
             
-            // Notify HR managers and admins
-            $this->notificationManager->notifyHRManagers(
+            // Notify competency stakeholders (admins, HR managers, competency managers)
+            $this->notificationManager->notifyCompetencyManagers(
                 'competency_added',
                 [
                     'competency_name' => $competencyData['name'],
@@ -212,8 +212,8 @@ class CompetencyManager {
                     $updatedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
                 }
                 
-                // Notify HR managers and admins
-                $this->notificationManager->notifyHRManagers(
+                // Notify competency stakeholders (admins, HR managers, competency managers)
+                $this->notificationManager->notifyCompetencyManagers(
                     'model_updated',
                     [
                         'model_name' => $modelName,
@@ -266,11 +266,18 @@ class CompetencyManager {
             $result = $stmt->execute([$modelId]);
             
             if ($result) {
-                // Notify HR managers and admins
-                $this->notificationManager->notifyHRManagers(
+                // Get current user info for notification
+                $userStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $userStmt->execute([$_SESSION['user_id'] ?? 1]);
+                $user = $userStmt->fetch();
+                $deletedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
+                
+                // Notify competency managers
+                $this->notificationManager->notifyCompetencyManagers(
                     $hasStatusColumn ? 'model_archived' : 'model_deleted',
                     [
-                        'model_name' => $modelName
+                        'model_name' => $modelName,
+                        'deleted_by' => $deletedBy
                     ],
                     $modelId,
                     'model',
@@ -357,12 +364,19 @@ class CompetencyManager {
         $result = $stmt->execute([$competencyId]);
         
         if ($result && $competency) {
-            // Notify HR managers and admins
-            $this->notificationManager->notifyHRManagers(
+            // Get current user info for notification
+            $userStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+            $userStmt->execute([$_SESSION['user_id'] ?? 1]);
+            $user = $userStmt->fetch();
+            $deletedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
+            
+            // Notify competency managers
+            $this->notificationManager->notifyCompetencyManagers(
                 'competency_deleted',
                 [
                     'competency_name' => $competency['competency_name'],
-                    'model_name' => $competency['model_name']
+                    'model_name' => $competency['model_name'],
+                    'deleted_by' => $deletedBy
                 ],
                 $competencyId,
                 'competency',
@@ -404,8 +418,8 @@ class CompetencyManager {
                 $creator = $creatorStmt->fetch();
                 $creatorName = $creator ? $creator['first_name'] . ' ' . $creator['last_name'] : 'Unknown';
                 
-                // Notify HR managers and admins
-                $this->notificationManager->notifyHRManagers(
+                // Notify competency stakeholders (admins, HR managers, competency managers)
+                $this->notificationManager->notifyCompetencyManagers(
                     'cycle_created',
                     [
                         'cycle_name' => $cycleData['name'],
@@ -469,18 +483,41 @@ class CompetencyManager {
             $cycle = $cycleStmt->fetch();
             $cycleName = $cycle ? $cycle['name'] : 'Unknown Cycle';
             
-            // Notify the evaluator
-            $this->notificationManager->notifyUser(
+            // Get assigner name
+            $assignerName = 'System';
+            try {
+                $assignerStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
+                $assignerStmt->execute([$_SESSION['user_id'] ?? null]);
+                $assigner = $assignerStmt->fetch();
+                if ($assigner) {
+                    $assignerName = trim(($assigner['first_name'] ?? '') . ' ' . ($assigner['last_name'] ?? '')) ?: 'System';
+                }
+            } catch (PDOException $e) { /* ignore */ }
+
+            // Notify the evaluator with explicit actor in the message
+            $this->notificationManager->createNotification(
                 $evaluationData['evaluator_id'],
                 'evaluation_assigned',
-                [
-                    'employee_name' => $employeeName,
-                    'cycle_name' => $cycleName
-                ],
+                'New Evaluation Assigned',
+                $assignerName . ' assigned you to evaluate ' . $employeeName . ' for the ' . $cycleName . ' cycle.',
                 $evaluationId,
                 'evaluation',
                 '?page=evaluation_form&id=' . $evaluationId,
                 true
+            );
+
+            // Notify competency stakeholders (admins, HR managers, competency managers)
+            $this->notificationManager->notifyCompetencyManagers(
+                'evaluation_assigned',
+                [
+                    'employee_name' => $employeeName,
+                    'cycle_name' => $cycleName,
+                    'assigned_by' => $assignerName
+                ],
+                $evaluationId,
+                'evaluation',
+                '?page=evaluations&action=view&id=' . $evaluationId,
+                false
             );
         }
         
@@ -580,8 +617,8 @@ class CompetencyManager {
                 $employeeName = $evaluation['employee_first_name'] . ' ' . $evaluation['employee_last_name'];
                 $evaluatorName = $evaluation['evaluator_first_name'] . ' ' . $evaluation['evaluator_last_name'];
                 
-                // Notify HR managers about completed evaluation
-                $this->notificationManager->notifyHRManagers(
+                // Notify competency stakeholders about completed evaluation
+                $this->notificationManager->notifyCompetencyManagers(
                     'evaluation_completed',
                     [
                         'employee_name' => $employeeName,
@@ -813,8 +850,8 @@ class CompetencyManager {
                     $updatedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
                 }
                 
-                // Notify HR managers and admins
-                $this->notificationManager->notifyHRManagers(
+                // Notify competency stakeholders (admins, HR managers, competency managers)
+                $this->notificationManager->notifyCompetencyManagers(
                     'cycle_updated',
                     [
                         'cycle_name' => $cycleName,
@@ -862,8 +899,8 @@ class CompetencyManager {
                     $deletedBy = $user ? $user['first_name'] . ' ' . $user['last_name'] : 'System';
                 }
                 
-                // Notify HR managers and admins
-                $this->notificationManager->notifyHRManagers(
+                // Notify competency stakeholders (admins, HR managers, competency managers)
+                $this->notificationManager->notifyCompetencyManagers(
                     'cycle_deleted',
                     [
                         'cycle_name' => $cycleName,

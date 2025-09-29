@@ -213,6 +213,77 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                     <span class="ml-3 item-text">Notifications</span>
                 </a>
             </li>
+            <?php elseif ($current_user['role'] === 'competency_manager'): ?>
+            <!-- Competency Manager Navigation -->
+            <li class="nav-item dropdown">
+                <a href="#competency_mgr" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link">
+                    <i class="fe fe-target fe-16"></i>
+                    <span class="ml-3 item-text">Competency Management</span>
+                </a>
+                <ul class="collapse list-unstyled pl-4 w-100" id="competency_mgr">
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'competency_models') ? 'active' : ''; ?>" href="?page=competency_models">
+                            <span class="ml-1 item-text">Competency Models</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'evaluation_cycles') ? 'active' : ''; ?>" href="?page=evaluation_cycles">
+                            <span class="ml-1 item-text">Evaluation Cycles</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'evaluations') ? 'active' : ''; ?>" href="?page=evaluations">
+                            <span class="ml-1 item-text">Evaluations</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'competency_reports') ? 'active' : ''; ?>" href="?page=competency_reports">
+                            <span class="ml-1 item-text">Reports</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <?php elseif ($current_user['role'] === 'learning_training_manager'): ?>
+            <!-- Learning & Training Manager Navigation -->
+            <li class="nav-item dropdown">
+                <a href="#learning_mgr" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link">
+                    <i class="fe fe-book-open fe-16"></i>
+                    <span class="ml-3 item-text">Learning & Training</span>
+                </a>
+                <ul class="collapse list-unstyled pl-4 w-100" id="learning_mgr">
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'learning_management' || $page == 'learning_management_enhanced') ? 'active' : ''; ?>" href="?page=learning_management">
+                            <span class="ml-1 item-text">Learning Management</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'training_management') ? 'active' : ''; ?>" href="?page=training_management">
+                            <span class="ml-1 item-text">Training Management</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'training_requests') ? 'active' : ''; ?>" href="?page=training_requests">
+                            <span class="ml-1 item-text">Training Requests</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pl-3 <?php echo ($page == 'training_feedback_management') ? 'active' : ''; ?>" href="?page=training_feedback_management">
+                            <span class="ml-1 item-text">Training Feedback</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+
+            <?php elseif ($current_user['role'] === 'succession_manager'): ?>
+            <!-- Succession Planning Manager Navigation -->
+            <li class="nav-item">
+                <a href="?page=succession_planning" class="nav-link <?php echo ($page == 'succession_planning') ? 'active' : ''; ?>">
+                    <i class="fe fe-trending-up fe-16"></i>
+                    <span class="ml-3 item-text">Succession Planning</span>
+                </a>
+            </li>
+
             <?php else: ?>
             
             <!-- HR Management -->

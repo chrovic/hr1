@@ -83,6 +83,54 @@ class NotificationManager {
         }
         return $template;
     }
+
+    // Fallback title/message when templates are missing
+    private function buildFallbackContent($notificationType, $variables) {
+        $title = 'Notification';
+        $message = '';
+        switch ($notificationType) {
+            case 'model_created':
+                $title = 'New Competency Model';
+                $message = ($variables['created_by'] ?? 'Someone') . ' created model "' . ($variables['model_name'] ?? '') . '".';
+                break;
+            case 'model_updated':
+                $title = 'Competency Model Updated';
+                $message = ($variables['updated_by'] ?? 'Someone') . ' updated model "' . ($variables['model_name'] ?? '') . '".';
+                break;
+            case 'competency_added':
+                $title = 'Competency Added';
+                $message = 'New competency "' . ($variables['competency_name'] ?? '') . '" added to ' . ($variables['model_name'] ?? 'a model') . '.';
+                break;
+            case 'cycle_created':
+                $title = 'Evaluation Cycle Created';
+                $message = ($variables['created_by'] ?? 'Someone') . ' created cycle "' . ($variables['cycle_name'] ?? '') . '" (' . ($variables['type'] ?? '') . ').';
+                break;
+            case 'cycle_updated':
+                $title = 'Evaluation Cycle Updated';
+                $message = ($variables['updated_by'] ?? 'Someone') . ' updated cycle "' . ($variables['cycle_name'] ?? '') . '".';
+                break;
+            case 'cycle_deleted':
+                $title = 'Evaluation Cycle Deleted';
+                $message = ($variables['deleted_by'] ?? 'Someone') . ' deleted cycle "' . ($variables['cycle_name'] ?? '') . '".';
+                break;
+            case 'evaluation_assigned':
+                $title = 'New Evaluation Assigned';
+                $message = (($variables['assigned_by'] ?? 'Someone') . ' assigned an evaluation for ' . ($variables['employee_name'] ?? 'an employee') . (isset($variables['cycle_name']) ? (' (' . $variables['cycle_name'] . ')') : '') . '.');
+                break;
+            case 'evaluation_completed':
+                $title = 'Evaluation Completed';
+                $message = 'Evaluation completed for ' . ($variables['employee_name'] ?? 'an employee') . ' by ' . ($variables['evaluator_name'] ?? 'evaluator') . '.';
+                break;
+            case 'score_submitted':
+                $title = 'Scores Submitted';
+                $message = 'Scores were submitted by ' . ($variables['evaluator_name'] ?? 'evaluator') . '.';
+                break;
+            default:
+                $title = ucfirst(str_replace('_', ' ', $notificationType));
+                $message = '';
+        }
+        return [$title, $message];
+    }
     
     /**
      * Get user notifications
@@ -339,15 +387,108 @@ class NotificationManager {
             $successCount = 0;
             foreach ($users as $user) {
                 if ($this->shouldReceiveNotification($user['id'], $notificationType)) {
-                    if ($this->createNotificationFromTemplate($user['id'], $notificationType, $variables, $relatedId, $relatedType, $actionUrl, $isImportant)) {
-                        $successCount++;
+                    $ok = $this->createNotificationFromTemplate($user['id'], $notificationType, $variables, $relatedId, $relatedType, $actionUrl, $isImportant);
+                    if (!$ok) {
+                        list($title, $message) = $this->buildFallbackContent($notificationType, $variables);
+                        $ok = $this->createNotification($user['id'], $notificationType, $title, $message, $relatedId, $relatedType, $actionUrl, $isImportant);
                     }
+                    if ($ok) { $successCount++; }
                 }
             }
             
             return $successCount;
         } catch (Exception $e) {
             error_log("Error notifying HR managers: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Notify competency stakeholders (admins, HR managers, and competency managers)
+     */
+    public function notifyCompetencyManagers($notificationType, $variables = [], $relatedId = null, $relatedType = null, $actionUrl = null, $isImportant = false) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT id FROM users
+                WHERE role IN ('admin', 'hr_manager', 'competency_manager') AND status = 'active'
+            ");
+            $stmt->execute();
+            $users = $stmt->fetchAll();
+
+            $successCount = 0;
+            foreach ($users as $user) {
+                if ($this->shouldReceiveNotification($user['id'], $notificationType)) {
+                    if ($this->createNotificationFromTemplate($user['id'], $notificationType, $variables, $relatedId, $relatedType, $actionUrl, $isImportant)) {
+                        $successCount++;
+                    }
+                }
+            }
+
+            return $successCount;
+        } catch (Exception $e) {
+            error_log("Error notifying competency managers: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Notify learning & training stakeholders (admins, HR managers, and learning_training_managers)
+     */
+    public function notifyLearningManagers($notificationType, $variables = [], $relatedId = null, $relatedType = null, $actionUrl = null, $isImportant = false) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT id FROM users
+                WHERE role IN ('admin', 'hr_manager', 'learning_training_manager') AND status = 'active'
+            ");
+            $stmt->execute();
+            $users = $stmt->fetchAll();
+
+            $successCount = 0;
+            foreach ($users as $user) {
+                if ($this->shouldReceiveNotification($user['id'], $notificationType)) {
+                    $ok = $this->createNotificationFromTemplate($user['id'], $notificationType, $variables, $relatedId, $relatedType, $actionUrl, $isImportant);
+                    if (!$ok) {
+                        list($title, $message) = $this->buildFallbackContent($notificationType, $variables);
+                        $ok = $this->createNotification($user['id'], $notificationType, $title, $message, $relatedId, $relatedType, $actionUrl, $isImportant);
+                    }
+                    if ($ok) { $successCount++; }
+                }
+            }
+
+            return $successCount;
+        } catch (Exception $e) {
+            error_log("Error notifying learning managers: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Notify succession planning stakeholders (admins, HR managers, and succession_managers)
+     */
+    public function notifySuccessionManagers($notificationType, $variables = [], $relatedId = null, $relatedType = null, $actionUrl = null, $isImportant = false) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT id FROM users
+                WHERE role IN ('admin', 'hr_manager', 'succession_manager') AND status = 'active'
+            ");
+            $stmt->execute();
+            $users = $stmt->fetchAll();
+
+            $successCount = 0;
+            foreach ($users as $user) {
+                if ($this->shouldReceiveNotification($user['id'], $notificationType)) {
+                    $ok = $this->createNotificationFromTemplate($user['id'], $notificationType, $variables, $relatedId, $relatedType, $actionUrl, $isImportant);
+                    if (!$ok) {
+                        list($title, $message) = $this->buildFallbackContent($notificationType, $variables);
+                        $ok = $this->createNotification($user['id'], $notificationType, $title, $message, $relatedId, $relatedType, $actionUrl, $isImportant);
+                    }
+                    if ($ok) { $successCount++; }
+                }
+            }
+
+            return $successCount;
+        } catch (Exception $e) {
+            error_log("Error notifying succession managers: " . $e->getMessage());
             return 0;
         }
     }

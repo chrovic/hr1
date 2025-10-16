@@ -6,26 +6,27 @@ $auth = new SimpleAuth();
 $current_user = $auth->getCurrentUser();
 $db = getDB();
 
-// Get user activities
+// Get user activities (prefer activity_logs, fallback to system_logs)
 $activities = [];
 try {
+    $hasActivity = $db->query("SHOW TABLES LIKE 'activity_logs'")->rowCount() > 0;
+} catch (Exception $e) { $hasActivity = false; }
+try {
+    $hasSystem = $db->query("SHOW TABLES LIKE 'system_logs'")->rowCount() > 0;
+} catch (Exception $e) { $hasSystem = false; }
+
+$logTable = $hasActivity ? 'activity_logs' : ($hasSystem ? 'system_logs' : null);
+if ($logTable) {
     $stmt = $db->prepare("
-        SELECT sl.*, u.first_name, u.last_name 
-        FROM system_logs sl 
-        LEFT JOIN users u ON sl.user_id = u.id 
+        SELECT sl.*, u.first_name, u.last_name
+        FROM $logTable sl
+        LEFT JOIN users u ON sl.user_id = u.id
         WHERE sl.user_id = ?
-        ORDER BY sl.created_at DESC 
+        ORDER BY sl.created_at DESC
         LIMIT 50
     ");
     $stmt->execute([$current_user['id']]);
     $activities = $stmt->fetchAll();
-} catch (PDOException $e) {
-    // If system_logs table doesn't exist, create sample activities
-    $activities = [
-        ['action' => 'Logged in', 'table_name' => 'system', 'created_at' => date('Y-m-d H:i:s')],
-        ['action' => 'Updated profile', 'table_name' => 'users', 'created_at' => date('Y-m-d H:i:s')],
-        ['action' => 'Viewed dashboard', 'table_name' => 'dashboard', 'created_at' => date('Y-m-d H:i:s')]
-    ];
 }
 
 // Helper function to get activity icon

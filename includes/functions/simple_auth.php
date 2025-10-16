@@ -346,25 +346,79 @@ class SimpleAuth {
         }
     }
 
-    // Log user activities
+    // Log user activities (ensures table exists, falls back to system_logs)
     public function logActivity($action, $table, $record_id = null, $old_values = null, $new_values = null) {
+        $userId = $_SESSION['user_id'] ?? null;
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        // Preferred table
+        if ($this->insertLogRow('activity_logs', $userId, $action, $table, $record_id, $old_values, $new_values, $ip, $ua)) {
+            return;
+        }
+        // Fallback table
+        $this->insertLogRow('system_logs', $userId, $action, $table, $record_id, $old_values, $new_values, $ip, $ua);
+    }
+
+    private function insertLogRow($tableName, $userId, $action, $table, $record_id, $old_values, $new_values, $ip, $ua) {
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO activity_logs (user_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ");
-            $stmt->execute([
-                $_SESSION['user_id'] ?? null,
+            $sql = "INSERT INTO $tableName (user_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute([
+                $userId,
                 $action,
                 $table,
                 $record_id,
                 $old_values ? json_encode($old_values) : null,
                 $new_values ? json_encode($new_values) : null,
-                $_SERVER['REMOTE_ADDR'] ?? '',
-                $_SERVER['HTTP_USER_AGENT'] ?? ''
+                $ip,
+                $ua
             ]);
         } catch (PDOException $e) {
-            error_log("Activity log error: " . $e->getMessage());
+            // If table missing, create then retry once
+            if (stripos($e->getMessage(), '42S02') !== false || stripos($e->getMessage(), 'Base table or view not found') !== false) {
+                $this->ensureLogTableExists($tableName);
+                try {
+                    $sql = "INSERT INTO $tableName (user_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                    $stmt = $this->db->prepare($sql);
+                    return $stmt->execute([
+                        $userId,
+                        $action,
+                        $table,
+                        $record_id,
+                        $old_values ? json_encode($old_values) : null,
+                        $new_values ? json_encode($new_values) : null,
+                        $ip,
+                        $ua
+                    ]);
+                } catch (PDOException $e2) {
+                    error_log("Activity log retry error ($tableName): " . $e2->getMessage());
+                    return false;
+                }
+            }
+            error_log("Activity log error ($tableName): " . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function ensureLogTableExists($tableName) {
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS $tableName (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NULL,
+                action VARCHAR(100) NOT NULL,
+                table_name VARCHAR(100) NULL,
+                record_id INT NULL,
+                old_values JSON NULL,
+                new_values JSON NULL,
+                ip_address VARCHAR(45) NULL,
+                user_agent TEXT,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_created (user_id, created_at),
+                INDEX idx_action_created (action, created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (PDOException $e) {
+            error_log("Ensure log table error ($tableName): " . $e->getMessage());
         }
     }
 }

@@ -22,6 +22,9 @@ $requestManager = new RequestManager();
 $message = '';
 $error = '';
 
+// Get current user
+$current_user = $auth->getCurrentUser();
+
 // Handle form submissions
 if ($_POST) {
     if (isset($_POST['approve_request'])) {
@@ -61,17 +64,35 @@ if ($_POST) {
     }
 }
 
-// Get current user
-$current_user = $auth->getCurrentUser();
-
 // Get request data
 $filter_status = $_GET['status'] ?? 'pending';
 $filter_type = $_GET['type'] ?? '';
 $search = $_GET['search'] ?? '';
 
-$allRequests = $requestManager->getAllRequests($filter_status, $filter_type);
+$filters = [
+    'status' => $filter_status ?: null,
+    'request_type_id' => $filter_type ?: null,
+    'search' => $search ?: null
+];
+$allRequests = $requestManager->getAllRequests($filters);
 $requestTypes = $requestManager->getRequestTypes();
 $requestStats = $requestManager->getRequestStatistics();
+
+// Use filtered stats for the cards when filters are applied
+$filteredStats = [
+    'total' => 0,
+    'pending' => 0,
+    'approved' => 0,
+    'rejected' => 0
+];
+foreach ($allRequests as $req) {
+    $filteredStats['total']++;
+    $statusValue = $req['status'] ?? 'pending';
+    if (isset($filteredStats[$statusValue])) {
+        $filteredStats[$statusValue]++;
+    }
+}
+$cardStats = ($filter_status || $filter_type || $search) ? $filteredStats : ($requestStats ?: $filteredStats);
 ?>
 
 <div class="row">
@@ -88,7 +109,7 @@ $requestStats = $requestManager->getRequestStatistics();
     <div class="col-md-3 mb-3">
         <div class="card shadow">
             <div class="card-body text-center">
-                <div class="display-4 font-weight-bold text-warning"><?php echo $requestStats['pending'] ?? 0; ?></div>
+                <div class="display-4 font-weight-bold text-warning"><?php echo $cardStats['pending'] ?? 0; ?></div>
                 <div class="text-muted">Pending Requests</div>
             </div>
         </div>
@@ -96,7 +117,7 @@ $requestStats = $requestManager->getRequestStatistics();
     <div class="col-md-3 mb-3">
         <div class="card shadow">
             <div class="card-body text-center">
-                <div class="display-4 font-weight-bold text-success"><?php echo $requestStats['approved'] ?? 0; ?></div>
+                <div class="display-4 font-weight-bold text-success"><?php echo $cardStats['approved'] ?? 0; ?></div>
                 <div class="text-muted">Approved</div>
             </div>
         </div>
@@ -104,7 +125,7 @@ $requestStats = $requestManager->getRequestStatistics();
     <div class="col-md-3 mb-3">
         <div class="card shadow">
             <div class="card-body text-center">
-                <div class="display-4 font-weight-bold text-danger"><?php echo $requestStats['rejected'] ?? 0; ?></div>
+                <div class="display-4 font-weight-bold text-danger"><?php echo $cardStats['rejected'] ?? 0; ?></div>
                 <div class="text-muted">Rejected</div>
             </div>
         </div>
@@ -112,7 +133,7 @@ $requestStats = $requestManager->getRequestStatistics();
     <div class="col-md-3 mb-3">
         <div class="card shadow">
             <div class="card-body text-center">
-                <div class="display-4 font-weight-bold text-info"><?php echo $requestStats['total'] ?? 0; ?></div>
+                <div class="display-4 font-weight-bold text-info"><?php echo $cardStats['total'] ?? 0; ?></div>
                 <div class="text-muted">Total Requests</div>
             </div>
         </div>
@@ -144,7 +165,7 @@ $requestStats = $requestManager->getRequestStatistics();
                         <select class="form-control" id="type" name="type">
                             <option value="">All Types</option>
                             <?php foreach ($requestTypes as $type): ?>
-                                <option value="<?php echo $type['id']; ?>" <?php echo $filter_type == $type['id'] ? 'selected' : ''; ?>>
+                                <option value="<?php echo htmlspecialchars($type['id']); ?>" <?php echo $filter_type == $type['id'] ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($type['name']); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -250,7 +271,8 @@ $requestStats = $requestManager->getRequestStatistics();
                                         <td>
                                             <?php
                                             $priority_class = '';
-                                            switch ($request['priority']) {
+                                            $priorityValue = $request['priority'] ?? 'medium';
+                                            switch ($priorityValue) {
                                                 case 'urgent':
                                                     $priority_class = 'danger';
                                                     break;
@@ -266,13 +288,14 @@ $requestStats = $requestManager->getRequestStatistics();
                                             }
                                             ?>
                                             <span class="badge badge-<?php echo $priority_class; ?>">
-                                                <?php echo ucfirst($request['priority']); ?>
+                                                <?php echo ucfirst((string)$priorityValue); ?>
                                             </span>
                                         </td>
                                         <td>
                                             <?php
                                             $status_class = '';
-                                            switch ($request['status']) {
+                                            $statusValue = $request['status'] ?? 'pending';
+                                            switch ($statusValue) {
                                                 case 'approved':
                                                     $status_class = 'success';
                                                     break;
@@ -288,10 +311,15 @@ $requestStats = $requestManager->getRequestStatistics();
                                             }
                                             ?>
                                             <span class="badge badge-<?php echo $status_class; ?>">
-                                                <?php echo ucfirst($request['status']); ?>
+                                                <?php echo ucfirst((string)$statusValue); ?>
                                             </span>
                                         </td>
-                                        <td><?php echo $request['requested_date'] ? date('M d, Y', strtotime($request['requested_date'])) : 'N/A'; ?></td>
+                                        <td>
+                                            <?php
+                                            $requestedDate = $request['requested_date'] ?? $request['request_date'] ?? null;
+                                            echo $requestedDate ? date('M d, Y', strtotime($requestedDate)) : 'N/A';
+                                            ?>
+                                        </td>
                                         <td><?php echo date('M d, Y', strtotime($request['created_at'])); ?></td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
@@ -414,16 +442,20 @@ function viewRequest(requestId) {
         </div>
     `;
     $('#requestModal').modal('show');
-    
-    // In a real implementation, this would load request details via AJAX
-    setTimeout(() => {
-        document.getElementById('requestModalBody').innerHTML = `
-            <div class="alert alert-info">
-                <i class="fe fe-info fe-16 mr-2"></i>
-                Request details view will be implemented here.
-            </div>
-        `;
-    }, 1000);
+
+    fetch('ajax/request_details.php?id=' + encodeURIComponent(requestId), { credentials: 'same-origin' })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            document.getElementById('requestModalBody').innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('requestModalBody').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fe fe-alert-circle fe-16 mr-2"></i>
+                    Failed to load request details.
+                </div>
+            `;
+        });
 }
 
 function approveRequest(requestId) {

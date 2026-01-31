@@ -94,24 +94,42 @@ try {
     error_log("Employee stats error: " . $e->getMessage());
 }
 
-// Get recent activities
+// Get recent activities (activity_logs or system_logs fallback)
 $recentActivities = [];
 try {
     $stmt = $db->prepare("
-        SELECT action, table_name, created_at 
-        FROM activity_logs 
-        WHERE user_id = ? 
-        ORDER BY created_at DESC 
-        LIMIT 5
+        SELECT COUNT(*) 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activity_logs'
     ");
-    $stmt->execute([$current_user['id']]);
-    $recentActivities = $stmt->fetchAll();
+    $stmt->execute();
+    $hasActivityLogs = (int)$stmt->fetchColumn() > 0;
+
+    if ($hasActivityLogs) {
+        $stmt = $db->prepare("
+            SELECT action, table_name, created_at 
+            FROM activity_logs 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 5
+        ");
+        $stmt->execute([$current_user['id']]);
+        $recentActivities = $stmt->fetchAll();
+    }
+
+    if (empty($recentActivities)) {
+        $stmt = $db->prepare("
+            SELECT action, table_name, created_at
+            FROM system_logs
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 5
+        ");
+        $stmt->execute([$current_user['id']]);
+        $recentActivities = $stmt->fetchAll();
+    }
 } catch (PDOException $e) {
-    // If activity_logs doesn't exist, create sample activities
-    $recentActivities = [
-        ['action' => 'login', 'table_name' => 'users', 'created_at' => date('Y-m-d H:i:s')],
-        ['action' => 'view_profile', 'table_name' => 'users', 'created_at' => date('Y-m-d H:i:s', strtotime('-1 hour'))]
-    ];
+    $recentActivities = [];
 }
 
 // Get upcoming training sessions
@@ -343,6 +361,39 @@ try {
 .ess-badge.warning { background: #fff3cd; color: #856404; }
 .ess-badge.info { background: #d1ecf1; color: #0c5460; }
 .ess-badge.primary { background: #cce7ff; color: #0056b3; }
+
+body.dark .ess-profile-card,
+.dark .ess-profile-card,
+body.dark .ess-stat-card,
+.dark .ess-stat-card,
+body.dark .ess-quick-action,
+.dark .ess-quick-action,
+body.dark .ess-section-card,
+.dark .ess-section-card {
+    background: #1e2428;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    color: #e9ecef;
+}
+
+body.dark .ess-section-header,
+.dark .ess-section-header {
+    background: linear-gradient(135deg, #232b30 0%, #1d2428 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .ess-activity-item,
+.dark .ess-activity-item {
+    background: #1f262b;
+    border-left-color: rgba(255, 255, 255, 0.12);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .ess-activity-item:hover,
+.dark .ess-activity-item:hover {
+    background-color: #232a2f;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
 
 @media (max-width: 768px) {
     .ess-hero {

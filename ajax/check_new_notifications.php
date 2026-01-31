@@ -1,7 +1,8 @@
 <?php
-require_once 'includes/data/db.php';
-require_once 'includes/functions/simple_auth.php';
-require_once 'includes/functions/notification_manager.php';
+session_start();
+require_once '../includes/data/db.php';
+require_once '../includes/functions/simple_auth.php';
+require_once '../includes/functions/notification_manager.php';
 
 header('Content-Type: application/json');
 

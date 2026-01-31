@@ -24,6 +24,25 @@ $search = $_GET['search'] ?? '';
 $department = $_GET['department'] ?? '';
 $status = $_GET['status'] ?? 'active';
 
+// Detect schema differences
+$hasDeptId = false;
+$hasPositionId = false;
+try {
+    $stmt = $db->prepare("
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users'
+          AND COLUMN_NAME IN ('department_id', 'position_id')
+    ");
+    $stmt->execute();
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $hasDeptId = in_array('department_id', $columns, true);
+    $hasPositionId = in_array('position_id', $columns, true);
+} catch (PDOException $e) {
+    // fallback to default assumptions
+}
+
 // Build query
 $where_conditions = ["u.role = 'employee'"];
 $params = [];
@@ -37,8 +56,13 @@ if ($search) {
 }
 
 if ($department) {
-    $where_conditions[] = "u.department_id = ?";
-    $params[] = $department;
+    if ($hasDeptId) {
+        $where_conditions[] = "u.department_id = ?";
+        $params[] = $department;
+    } else {
+        $where_conditions[] = "u.department = ?";
+        $params[] = $department;
+    }
 }
 
 if ($status) {
@@ -53,13 +77,13 @@ try {
     $stmt = $db->prepare("
         SELECT 
             u.*,
-            d.name as department_name,
-            p.title as position_title,
+            " . ($hasDeptId ? "d.name as department_name" : "u.department as department_name") . ",
+            " . ($hasPositionId ? "p.title as position_title" : "u.position as position_title") . ",
             COUNT(e.id) as evaluation_count,
-            AVG(e.overall_rating) as avg_rating
+            AVG(e.overall_score) as avg_rating
         FROM users u
-        LEFT JOIN departments d ON u.department_id = d.id
-        LEFT JOIN positions p ON u.position_id = p.id
+        " . ($hasDeptId ? "LEFT JOIN departments d ON u.department_id = d.id" : "") . "
+        " . ($hasPositionId ? "LEFT JOIN positions p ON u.position_id = p.id" : "") . "
         LEFT JOIN evaluations e ON u.id = e.employee_id AND e.status = 'completed'
         WHERE $where_clause
         GROUP BY u.id
@@ -74,9 +98,22 @@ try {
 
 // Get departments for filter
 try {
-    $stmt = $db->prepare("SELECT id, name FROM departments ORDER BY name");
-    $stmt->execute();
-    $departments = $stmt->fetchAll();
+    if ($hasDeptId) {
+        $stmt = $db->prepare("SELECT id, name FROM departments ORDER BY name");
+        $stmt->execute();
+        $departments = $stmt->fetchAll();
+    } else {
+        $stmt = $db->prepare("
+            SELECT DISTINCT department as name
+            FROM users
+            WHERE department IS NOT NULL AND department <> ''
+            ORDER BY department
+        ");
+        $stmt->execute();
+        $departments = array_map(function($row) {
+            return ['id' => $row['name'], 'name' => $row['name']];
+        }, $stmt->fetchAll());
+    }
 } catch (PDOException $e) {
     $departments = [];
 }
@@ -87,6 +124,37 @@ if ($_POST['action'] ?? false) {
     $employee_id = $_POST['employee_id'] ?? null;
     
     switch ($action) {
+        case 'update_employee':
+            if ($employee_id) {
+                $firstName = $_POST['first_name'] ?? null;
+                $lastName = $_POST['last_name'] ?? null;
+                $email = $_POST['email'] ?? null;
+                $statusValue = $_POST['status'] ?? null;
+                $departmentValue = $_POST['department'] ?? null;
+                $positionValue = $_POST['position'] ?? null;
+
+                try {
+                    $fields = [];
+                    $params = [];
+                    if ($firstName !== null) { $fields[] = "first_name = ?"; $params[] = $firstName; }
+                    if ($lastName !== null) { $fields[] = "last_name = ?"; $params[] = $lastName; }
+                    if ($email !== null) { $fields[] = "email = ?"; $params[] = $email; }
+                    if ($statusValue !== null) { $fields[] = "status = ?"; $params[] = $statusValue; }
+                    if (!$hasDeptId && $departmentValue !== null) { $fields[] = "department = ?"; $params[] = $departmentValue; }
+                    if (!$hasPositionId && $positionValue !== null) { $fields[] = "position = ?"; $params[] = $positionValue; }
+
+                    if (!empty($fields)) {
+                        $sql = "UPDATE users SET " . implode(', ', $fields) . " WHERE id = ?";
+                        $params[] = $employee_id;
+                        $stmt = $db->prepare($sql);
+                        $stmt->execute($params);
+                        $success_message = "Employee updated successfully.";
+                    }
+                } catch (PDOException $e) {
+                    $error_message = "Failed to update employee.";
+                }
+            }
+            break;
         case 'update_status':
             $new_status = $_POST['status'] ?? '';
             if ($employee_id && $new_status) {
@@ -335,15 +403,19 @@ function viewEmployee(employeeId) {
     `;
     $('#employeeModal').modal('show');
     
-    // In a real implementation, this would load employee details via AJAX
-    setTimeout(() => {
-        document.getElementById('employeeModalBody').innerHTML = `
-            <div class="alert alert-info">
-                <i class="fe fe-info fe-16 mr-2"></i>
-                Employee details view will be implemented here.
-            </div>
-        `;
-    }, 1000);
+    fetch('ajax/employee_details.php?id=' + encodeURIComponent(employeeId), { credentials: 'same-origin' })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            document.getElementById('employeeModalBody').innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('employeeModalBody').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fe fe-alert-circle fe-16 mr-2"></i>
+                    Failed to load employee details.
+                </div>
+            `;
+        });
 }
 
 function scheduleEvaluation(employeeId) {
@@ -370,15 +442,19 @@ function editEmployee(employeeId) {
     `;
     $('#employeeModal').modal('show');
     
-    // In a real implementation, this would load employee edit form via AJAX
-    setTimeout(() => {
-        document.getElementById('employeeModalBody').innerHTML = `
-            <div class="alert alert-info">
-                <i class="fe fe-info fe-16 mr-2"></i>
-                Employee edit form will be implemented here.
-            </div>
-        `;
-    }, 1000);
+    fetch('ajax/employee_edit.php?id=' + encodeURIComponent(employeeId), { credentials: 'same-origin' })
+        .then(function(response) { return response.text(); })
+        .then(function(html) {
+            document.getElementById('employeeModalBody').innerHTML = html;
+        })
+        .catch(function() {
+            document.getElementById('employeeModalBody').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fe fe-alert-circle fe-16 mr-2"></i>
+                    Failed to load employee edit form.
+                </div>
+            `;
+        });
 }
 </script>
 

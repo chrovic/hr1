@@ -258,6 +258,46 @@ $profileCompleteness = round(($completedFields / count($profileFields)) * 100);
     transform: translateY(-2px);
 }
 
+body.dark .profile-card,
+.dark .profile-card,
+body.dark .profile-completeness,
+.dark .profile-completeness,
+body.dark .profile-info-card,
+.dark .profile-info-card {
+    background: #1e2428;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    color: #e9ecef;
+}
+
+body.dark .profile-card-header,
+.dark .profile-card-header {
+    background: linear-gradient(135deg, #232b30 0%, #1d2428 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .profile-form-label,
+.dark .profile-form-label {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+body.dark .profile-form-control,
+.dark .profile-form-control {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
+body.dark .profile-form-control:focus,
+.dark .profile-form-control:focus {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .profile-info-item,
+.dark .profile-info-item {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
 @media (max-width: 768px) {
     .profile-hero {
         padding: 2rem;

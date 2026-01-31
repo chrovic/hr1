@@ -3,11 +3,93 @@
 class SuccessionPlanning {
     private $db;
     private $notificationManager;
+    private $successionCandidateSchema;
     
     public function __construct() {
         $this->db = getDB();
         require_once 'notification_manager.php';
         $this->notificationManager = new NotificationManager();
+    }
+
+    private function getTableColumns($tableName) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+            ");
+            $stmt->execute([$tableName]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+
+    private function tableExists($tableName) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT 1
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$tableName]);
+            return (bool)$stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    private function ensureSuccessionAssessmentsTable() {
+        if ($this->tableExists('succession_assessments')) {
+            return true;
+        }
+        try {
+            $this->db->exec("
+                CREATE TABLE IF NOT EXISTS succession_assessments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    candidate_id INT NOT NULL,
+                    assessor_id INT NOT NULL,
+                    assessment_type ENUM('initial', 'progress', 'final') NOT NULL,
+                    technical_readiness_score INT,
+                    leadership_readiness_score INT,
+                    cultural_fit_score INT,
+                    overall_readiness_score INT,
+                    strengths TEXT,
+                    development_areas TEXT,
+                    recommendations TEXT,
+                    assessment_date DATE NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (candidate_id) REFERENCES succession_candidates(id) ON DELETE CASCADE,
+                    FOREIGN KEY (assessor_id) REFERENCES users(id)
+                )
+            ");
+            return true;
+        } catch (PDOException $e) {
+            error_log("Error creating succession_assessments table: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function getSuccessionCandidateSchema() {
+        if ($this->successionCandidateSchema !== null) {
+            return $this->successionCandidateSchema;
+        }
+
+        $columns = $this->getTableColumns('succession_candidates');
+        $this->successionCandidateSchema = [
+            'role' => in_array('role_id', $columns, true) ? 'role_id' : 'position_id',
+            'employee' => in_array('employee_id', $columns, true) ? 'employee_id' : 'candidate_id',
+            'assigner' => in_array('assigned_by', $columns, true) ? 'assigned_by' : 'created_by',
+            'assessment_date' => in_array('assessment_date', $columns, true),
+            'next_review_date' => in_array('next_review_date', $columns, true),
+            'development_plan' => in_array('development_plan', $columns, true),
+            'notes' => in_array('notes', $columns, true)
+        ];
+
+        return $this->successionCandidateSchema;
     }
     
     // Create critical role
@@ -63,13 +145,15 @@ class SuccessionPlanning {
     // Get all critical roles
     public function getAllCriticalRoles() {
         try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
             $stmt = $this->db->prepare("
                 SELECT cr.*, u.first_name, u.last_name, u.position as incumbent_position,
                        COUNT(sc.id) as candidate_count,
                        COUNT(CASE WHEN sc.readiness_level = 'ready_now' THEN 1 END) as ready_now_count
                 FROM critical_positions cr
                 LEFT JOIN users u ON cr.current_incumbent_id = u.id
-                LEFT JOIN succession_candidates sc ON cr.id = sc.role_id
+                LEFT JOIN succession_candidates sc ON cr.id = sc.{$roleCol}
                 GROUP BY cr.id
                 ORDER BY cr.risk_level DESC, cr.position_title ASC
             ");
@@ -202,13 +286,23 @@ class SuccessionPlanning {
     // Get role candidates
     public function getRoleCandidates($roleId) {
         try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
+            $assignerCol = $schema['assigner'];
+            $assessmentDateSelect = $schema['assessment_date'] ? 'sc.assessment_date' : 'NULL as assessment_date';
+            $nextReviewSelect = $schema['next_review_date'] ? 'sc.next_review_date' : 'NULL as next_review_date';
+            $developmentPlanSelect = $schema['development_plan'] ? 'sc.development_plan' : 'NULL as development_plan';
+            $notesSelect = $schema['notes'] ? 'sc.notes' : 'NULL as notes';
+
             $stmt = $this->db->prepare("
                 SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                       {$assessmentDateSelect}, {$nextReviewSelect}, {$developmentPlanSelect}, {$notesSelect},
                        assigner.first_name as assigned_by_first_name, assigner.last_name as assigned_by_last_name
                 FROM succession_candidates sc
-                JOIN users u ON sc.employee_id = u.id
-                JOIN users assigner ON sc.assigned_by = assigner.id
-                WHERE sc.role_id = ?
+                JOIN users u ON sc.{$employeeCol} = u.id
+                JOIN users assigner ON sc.{$assignerCol} = assigner.id
+                WHERE sc.{$roleCol} = ?
                 ORDER BY sc.readiness_level ASC, u.last_name ASC
             ");
             $stmt->execute([$roleId]);
@@ -223,14 +317,25 @@ class SuccessionPlanning {
     // Get all succession candidates
     public function getAllCandidates() {
         try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
+            $assignerCol = $schema['assigner'];
+            $assessmentDateSelect = $schema['assessment_date'] ? 'sc.assessment_date' : 'NULL as assessment_date';
+            $nextReviewSelect = $schema['next_review_date'] ? 'sc.next_review_date' : 'NULL as next_review_date';
+            $developmentPlanSelect = $schema['development_plan'] ? 'sc.development_plan' : 'NULL as development_plan';
+            $notesSelect = $schema['notes'] ? 'sc.notes' : 'NULL as notes';
+
             $stmt = $this->db->prepare("
-                SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                SELECT sc.*, sc.{$roleCol} as role_id, sc.{$employeeCol} as employee_id, sc.{$assignerCol} as assigned_by,
+                       u.first_name, u.last_name, u.position, u.department,
+                       {$assessmentDateSelect}, {$nextReviewSelect}, {$developmentPlanSelect}, {$notesSelect},
                        cr.position_title, cr.department as role_department,
                        assigner.first_name as assigned_by_first_name, assigner.last_name as assigned_by_last_name
                 FROM succession_candidates sc
-                JOIN users u ON sc.employee_id = u.id
-                JOIN critical_positions cr ON sc.role_id = cr.id
-                JOIN users assigner ON sc.assigned_by = assigner.id
+                JOIN users u ON sc.{$employeeCol} = u.id
+                JOIN critical_positions cr ON sc.{$roleCol} = cr.id
+                JOIN users assigner ON sc.{$assignerCol} = assigner.id
                 ORDER BY cr.position_title ASC, sc.readiness_level ASC
             ");
             $stmt->execute();
@@ -274,6 +379,30 @@ class SuccessionPlanning {
         } catch (PDOException $e) {
             error_log("Error removing candidate: " . $e->getMessage());
             return false;
+        }
+    }
+
+    public function getPlanRoleId($planId) {
+        try {
+            $stmt = $this->db->prepare("SELECT role_id FROM succession_plans WHERE id = ?");
+            $stmt->execute([$planId]);
+            return $stmt->fetchColumn() ?: null;
+        } catch (PDOException $e) {
+            error_log("Error getting plan role: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function getCandidateRoleId($candidateId) {
+        try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $stmt = $this->db->prepare("SELECT {$roleCol} FROM succession_candidates WHERE id = ?");
+            $stmt->execute([$candidateId]);
+            return $stmt->fetchColumn() ?: null;
+        } catch (PDOException $e) {
+            error_log("Error getting candidate role: " . $e->getMessage());
+            return null;
         }
     }
     
@@ -332,6 +461,31 @@ class SuccessionPlanning {
             return false;
         }
     }
+
+    // Update succession plan
+    public function updateSuccessionPlan($planId, $updateData) {
+        try {
+            $stmt = $this->db->prepare("
+                UPDATE succession_plans SET
+                    plan_name = ?, role_id = ?, status = ?, start_date = ?, end_date = ?,
+                    objectives = ?, success_metrics = ?, updated_at = NOW()
+                WHERE id = ?
+            ");
+            return $stmt->execute([
+                $updateData['plan_name'],
+                $updateData['role_id'],
+                $updateData['status'],
+                $updateData['start_date'],
+                $updateData['end_date'],
+                $updateData['objectives'],
+                $updateData['success_metrics'],
+                $planId
+            ]);
+        } catch (PDOException $e) {
+            error_log("Error updating succession plan: " . $e->getMessage());
+            return false;
+        }
+    }
     
     // Get succession plans
     public function getSuccessionPlans() {
@@ -341,7 +495,7 @@ class SuccessionPlanning {
                        creator.first_name as created_by_first_name, creator.last_name as created_by_last_name,
                        COUNT(spc.id) as candidate_count
                 FROM succession_plans sp
-                JOIN critical_roles cr ON sp.role_id = cr.id
+                JOIN critical_positions cr ON sp.role_id = cr.id
                 JOIN users creator ON sp.created_by = creator.id
                 LEFT JOIN succession_plan_candidates spc ON sp.id = spc.plan_id
                 GROUP BY sp.id
@@ -355,24 +509,153 @@ class SuccessionPlanning {
             return [];
         }
     }
+
+    // Get succession plan by ID
+    public function getSuccessionPlan($planId) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT sp.*, cr.position_title, cr.department,
+                       creator.first_name as created_by_first_name, creator.last_name as created_by_last_name
+                FROM succession_plans sp
+                JOIN critical_positions cr ON sp.role_id = cr.id
+                JOIN users creator ON sp.created_by = creator.id
+                WHERE sp.id = ?
+            ");
+            $stmt->execute([$planId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("Error getting succession plan: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    // Add candidate to succession plan
+    public function addPlanCandidate($planId, $candidateId, $priorityOrder = 1, $targetReadinessDate = null, $developmentFocus = null) {
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO succession_plan_candidates (plan_id, candidate_id, priority_order, target_readiness_date, development_focus)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            return $stmt->execute([
+                $planId,
+                $candidateId,
+                $priorityOrder,
+                $targetReadinessDate,
+                $developmentFocus
+            ]);
+        } catch (PDOException $e) {
+            error_log("Error adding plan candidate: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Remove candidate from succession plan
+    public function removePlanCandidate($planCandidateId) {
+        try {
+            $stmt = $this->db->prepare("DELETE FROM succession_plan_candidates WHERE id = ?");
+            return $stmt->execute([$planCandidateId]);
+        } catch (PDOException $e) {
+            error_log("Error removing plan candidate: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Get candidates assigned to a succession plan
+    public function getPlanCandidates($planId) {
+        try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
+            $assessmentDateSelect = $schema['assessment_date'] ? 'sc.assessment_date' : 'NULL as assessment_date';
+            $nextReviewSelect = $schema['next_review_date'] ? 'sc.next_review_date' : 'NULL as next_review_date';
+
+            $stmt = $this->db->prepare("
+                SELECT spc.*, sc.readiness_level, {$assessmentDateSelect}, {$nextReviewSelect},
+                       u.first_name, u.last_name, u.position, u.department,
+                       cr.position_title as role_title
+                FROM succession_plan_candidates spc
+                JOIN succession_candidates sc ON spc.candidate_id = sc.id
+                JOIN users u ON sc.{$employeeCol} = u.id
+                JOIN critical_positions cr ON sc.{$roleCol} = cr.id
+                WHERE spc.plan_id = ?
+                ORDER BY spc.priority_order ASC, u.last_name ASC
+            ");
+            $stmt->execute([$planId]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            error_log("Error getting plan candidates: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    // Get candidate details with role and assigner
+    public function getCandidateDetails($candidateId) {
+        try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
+            $assignerCol = $schema['assigner'];
+            $assessmentDateSelect = $schema['assessment_date'] ? 'sc.assessment_date' : 'NULL as assessment_date';
+            $nextReviewSelect = $schema['next_review_date'] ? 'sc.next_review_date' : 'NULL as next_review_date';
+            $developmentPlanSelect = $schema['development_plan'] ? 'sc.development_plan' : 'NULL as development_plan';
+            $notesSelect = $schema['notes'] ? 'sc.notes' : 'NULL as notes';
+
+            $stmt = $this->db->prepare("
+                SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                       {$assessmentDateSelect}, {$nextReviewSelect}, {$developmentPlanSelect}, {$notesSelect},
+                       cr.position_title, cr.department as role_department, cr.risk_level,
+                       assigner.first_name as assigned_by_first_name, assigner.last_name as assigned_by_last_name
+                FROM succession_candidates sc
+                JOIN users u ON sc.{$employeeCol} = u.id
+                JOIN critical_positions cr ON sc.{$roleCol} = cr.id
+                JOIN users assigner ON sc.{$assignerCol} = assigner.id
+                WHERE sc.id = ?
+            ");
+            $stmt->execute([$candidateId]);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log("Error getting candidate details: " . $e->getMessage());
+            return null;
+        }
+    }
     
     // Get succession pipeline for a role
     public function getSuccessionPipeline($roleId) {
         try {
-            $stmt = $this->db->prepare("
-                SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
-                       sa.overall_readiness_score, sa.assessment_date as last_assessment
-                FROM succession_candidates sc
-                JOIN users u ON sc.employee_id = u.id
-                LEFT JOIN succession_assessments sa ON sc.id = sa.candidate_id 
-                    AND sa.assessment_date = (
-                        SELECT MAX(sa2.assessment_date) 
-                        FROM succession_assessments sa2 
-                        WHERE sa2.candidate_id = sc.id
-                    )
-                WHERE sc.role_id = ?
-                ORDER BY sc.readiness_level ASC, sa.overall_readiness_score DESC
-            ");
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
+            $assessmentDateSelect = $schema['assessment_date'] ? 'sc.assessment_date' : 'NULL as assessment_date';
+            $nextReviewSelect = $schema['next_review_date'] ? 'sc.next_review_date' : 'NULL as next_review_date';
+
+            $assessmentsAvailable = $this->tableExists('succession_assessments');
+            if ($assessmentsAvailable) {
+                $stmt = $this->db->prepare("
+                    SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                           {$assessmentDateSelect}, {$nextReviewSelect},
+                           sa.overall_readiness_score, sa.assessment_date as last_assessment
+                    FROM succession_candidates sc
+                    JOIN users u ON sc.{$employeeCol} = u.id
+                    LEFT JOIN succession_assessments sa ON sc.id = sa.candidate_id 
+                        AND sa.assessment_date = (
+                            SELECT MAX(sa2.assessment_date) 
+                            FROM succession_assessments sa2 
+                            WHERE sa2.candidate_id = sc.id
+                        )
+                    WHERE sc.{$roleCol} = ?
+                    ORDER BY sc.readiness_level ASC, sa.overall_readiness_score DESC
+                ");
+            } else {
+                $stmt = $this->db->prepare("
+                    SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                           {$assessmentDateSelect}, {$nextReviewSelect},
+                           NULL as overall_readiness_score, NULL as last_assessment
+                    FROM succession_candidates sc
+                    JOIN users u ON sc.{$employeeCol} = u.id
+                    WHERE sc.{$roleCol} = ?
+                    ORDER BY sc.readiness_level ASC
+                ");
+            }
             $stmt->execute([$roleId]);
             
             return $stmt->fetchAll();
@@ -429,6 +712,9 @@ class SuccessionPlanning {
     // Get employees available for succession
     public function getAvailableEmployees($roleId = null) {
         try {
+            $schema = $this->getSuccessionCandidateSchema();
+            $roleCol = $schema['role'];
+            $employeeCol = $schema['employee'];
             $sql = "
                 SELECT u.id, u.first_name, u.last_name, u.position, u.department, u.hire_date
                 FROM users u
@@ -439,7 +725,7 @@ class SuccessionPlanning {
             
             if ($roleId) {
                 $sql .= " AND u.id NOT IN (
-                    SELECT employee_id FROM succession_candidates WHERE role_id = ?
+                    SELECT {$employeeCol} FROM succession_candidates WHERE {$roleCol} = ?
                 )";
                 $params[] = $roleId;
             }
@@ -459,6 +745,9 @@ class SuccessionPlanning {
     // Add succession assessment
     public function addAssessment($assessmentData) {
         try {
+            if (!$this->ensureSuccessionAssessmentsTable()) {
+                return false;
+            }
             $stmt = $this->db->prepare("
                 INSERT INTO succession_assessments (candidate_id, assessor_id, assessment_type, technical_readiness_score, leadership_readiness_score, cultural_fit_score, overall_readiness_score, strengths, development_areas, recommendations, assessment_date) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -486,6 +775,9 @@ class SuccessionPlanning {
     // Get candidate assessments
     public function getCandidateAssessments($candidateId) {
         try {
+            if (!$this->tableExists('succession_assessments')) {
+                return [];
+            }
             $stmt = $this->db->prepare("
                 SELECT sa.*, u.first_name as assessor_first_name, u.last_name as assessor_last_name
                 FROM succession_assessments sa
@@ -503,4 +795,3 @@ class SuccessionPlanning {
     }
 }
 ?>
-

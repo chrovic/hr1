@@ -35,19 +35,21 @@ if ($auth->hasPermission('manage_system') || $current_user['role'] === 'hr_manag
                 'content' => $_POST['content'],
                 'priority' => $_POST['priority'],
                 'target_audience' => $_POST['target_audience'],
-                'created_by' => $current_user['id']
+                'created_by' => $current_user['id'],
+                'status' => 'active'
             ];
             
             try {
                 $stmt = $db->prepare("
-                    INSERT INTO announcements (title, content, priority, target_audience, created_by, created_at) 
-                    VALUES (?, ?, ?, ?, ?, NOW())
+                    INSERT INTO announcements (title, content, priority, target_audience, status, created_by, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ");
                 $result = $stmt->execute([
                     $announcementData['title'],
                     $announcementData['content'],
                     $announcementData['priority'],
                     $announcementData['target_audience'],
+                    $announcementData['status'],
                     $announcementData['created_by']
                 ]);
                 
@@ -357,7 +359,39 @@ if ($auth->isCompetencyManager()) {
 	} catch (PDOException $e) { $cmNotifications = []; }
 }
 
-// Get announcements for admin
+// Get announcements based on role/target audience
+$announcementsForRole = [];
+try {
+    $audiences = ['all', $current_user['role']];
+    $managerRoles = ['admin', 'hr_manager', 'competency_manager', 'learning_training_manager', 'succession_manager'];
+    if (in_array($current_user['role'], $managerRoles, true)) {
+        $audiences[] = 'managers';
+    }
+    if (in_array($current_user['role'], ['admin', 'hr_manager'], true)) {
+        $audiences[] = 'hr';
+    }
+    if ($current_user['role'] === 'employee') {
+        $audiences[] = 'employees';
+    }
+    $audiences = array_values(array_unique($audiences));
+    $placeholders = implode(',', array_fill(0, count($audiences), '?'));
+    
+    $stmt = $db->prepare("
+        SELECT a.*, u.first_name, u.last_name
+        FROM announcements a
+        LEFT JOIN users u ON a.created_by = u.id
+        WHERE a.status = 'active'
+        AND a.target_audience IN ($placeholders)
+        ORDER BY a.created_at DESC
+        LIMIT 5
+    ");
+    $stmt->execute($audiences);
+    $announcementsForRole = $stmt->fetchAll();
+} catch (PDOException $e) {
+    $announcementsForRole = [];
+}
+
+// Get announcements for admin management
 $announcements = [];
 if ($auth->hasPermission('manage_system')) {
     try {
@@ -413,6 +447,84 @@ function timeAgo($datetime) {
 <!-- Dashboard Specific CSS -->
 <link rel="stylesheet" href="assets/css/dashboard.css">
 
+<?php if (!empty($announcementsForRole)): ?>
+<div class="row dashboard-section">
+    <div class="col-12">
+        <div class="card shadow" id="announcementsCard">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong class="card-title">Announcements</strong>
+                <?php if (count($announcementsForRole) > 2): ?>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#announcementsModal">
+                        View all
+                    </button>
+                <?php endif; ?>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <?php foreach (array_slice($announcementsForRole, 0, 2) as $announcement): ?>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong><?php echo htmlspecialchars($announcement['title']); ?></strong>
+                                    <div class="text-muted small">
+                                        <?php echo htmlspecialchars($announcement['first_name'] . ' ' . $announcement['last_name']); ?>
+                                        &middot; <?php echo date('M j, Y', strtotime($announcement['created_at'])); ?>
+                                    </div>
+                                </div>
+                                <span class="badge badge-<?php echo $announcement['priority'] === 'high' ? 'danger' : ($announcement['priority'] === 'medium' ? 'warning' : 'info'); ?>">
+                                    <?php echo ucfirst($announcement['priority']); ?>
+                                </span>
+                            </div>
+                            <div class="text-muted small mt-2">
+                                <?php echo htmlspecialchars($announcement['content']); ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($announcementsForRole) && count($announcementsForRole) > 2): ?>
+<div class="modal fade" id="announcementsModal" tabindex="-1" role="dialog" aria-labelledby="announcementsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="announcementsModalLabel">All Announcements</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="list-group list-group-flush">
+                    <?php foreach ($announcementsForRole as $announcement): ?>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong><?php echo htmlspecialchars($announcement['title']); ?></strong>
+                                    <div class="text-muted small">
+                                        <?php echo htmlspecialchars($announcement['first_name'] . ' ' . $announcement['last_name']); ?>
+                                        &middot; <?php echo date('M j, Y', strtotime($announcement['created_at'])); ?>
+                                    </div>
+                                </div>
+                                <span class="badge badge-<?php echo $announcement['priority'] === 'high' ? 'danger' : ($announcement['priority'] === 'medium' ? 'warning' : 'info'); ?>">
+                                    <?php echo ucfirst($announcement['priority']); ?>
+                                </span>
+                            </div>
+                            <div class="text-muted small mt-2">
+                                <?php echo htmlspecialchars($announcement['content']); ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($current_user['role'] === 'employee'): ?>
 <!-- Enhanced CSS for Employee Dashboard -->
 <style>
@@ -453,6 +565,12 @@ function timeAgo($datetime) {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
+body.dark .emp-profile-card,
+.dark .emp-profile-card {
+    background: rgba(15, 20, 24, 0.6);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
 .emp-avatar {
     width: 90px;
     height: 90px;
@@ -479,6 +597,13 @@ function timeAgo($datetime) {
     position: relative;
     overflow: hidden;
     height: 100%;
+}
+
+body.dark .emp-stat-card,
+.dark .emp-stat-card {
+    background: #1e2428;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
 .emp-stat-card:hover {
@@ -539,6 +664,13 @@ function timeAgo($datetime) {
     overflow: hidden;
 }
 
+body.dark .emp-quick-action,
+.dark .emp-quick-action {
+    background: #1e2428;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #e9ecef;
+}
+
 .emp-quick-action::before {
     content: '';
     position: absolute;
@@ -570,10 +702,54 @@ function timeAgo($datetime) {
     overflow: hidden;
 }
 
+body.dark .emp-section-card,
+.dark .emp-section-card {
+    background: #1c2226;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
 .emp-section-header {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     padding: 2rem;
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+body.dark .emp-section-header,
+.dark .emp-section-header {
+    background: linear-gradient(135deg, #232b30 0%, #1d2428 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.light .emp-profile-card,
+.light .emp-profile-card {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.light .emp-stat-card,
+.light .emp-stat-card {
+    background: #ffffff;
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+body.light .emp-quick-action,
+.light .emp-quick-action {
+    background: #ffffff;
+    border-color: transparent;
+    color: inherit;
+}
+
+body.light .emp-section-card,
+.light .emp-section-card {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.05);
+}
+
+body.light .emp-section-header,
+.light .emp-section-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom-color: rgba(0, 0, 0, 0.1);
 }
 
 .emp-welcome-text {
@@ -768,75 +944,6 @@ function timeAgo($datetime) {
     </div>
 </div>
 
-<script>
-// Enhanced Employee Dashboard Interactions
-document.addEventListener('DOMContentLoaded', function() {
-    // Add enhanced hover effects to stat cards
-    document.querySelectorAll('.emp-stat-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-10px) scale(1.02)';
-            this.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-        });
-        
-        card.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateY(0) scale(1)';
-        });
-    });
-
-    // Add staggered animation to cards
-    const cards = document.querySelectorAll('.emp-stat-card, .emp-quick-action');
-    cards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(30px)';
-        
-        setTimeout(() => {
-            card.style.transition = 'all 0.6s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
-    });
-
-    // Add ripple effect to CTA button
-    const ctaButton = document.querySelector('.emp-cta-button');
-    if (ctaButton) {
-        ctaButton.addEventListener('click', function(e) {
-            const ripple = document.createElement('div');
-            ripple.style.cssText = `
-                position: absolute;
-                border-radius: 50%;
-                background: rgba(255, 255, 255, 0.6);
-                pointer-events: none;
-                transform: scale(0);
-                animation: ripple 0.6s ease-out;
-                width: 100px;
-                height: 100px;
-                left: ${e.offsetX - 50}px;
-                top: ${e.offsetY - 50}px;
-            `;
-            
-            this.style.position = 'relative';
-            this.style.overflow = 'hidden';
-            this.appendChild(ripple);
-            
-            setTimeout(() => {
-                ripple.remove();
-            }, 600);
-        });
-    }
-});
-
-// Add CSS animation for ripple effect
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes ripple {
-        to {
-            transform: scale(2);
-            opacity: 0;
-        }
-    }
-`;
-document.head.appendChild(style);
-</script>
 
 <?php elseif ($auth->isCompetencyManager()): ?>
 <!-- Competency Manager Dashboard Content -->
@@ -885,7 +992,7 @@ document.head.appendChild(style);
             </div>
             <div class="card-body">
                 <?php if (empty($cmNotifications)): ?>
-                    <div class="text-center text-muted py-4">
+                    <div class="text-center text-muted py-4 dashboard-empty">
                         <i class="fe fe-bell fe-48 mb-2"></i>
                         <div>No recent notifications.</div>
                     </div>
@@ -1285,35 +1392,34 @@ foreach ($criticalRoles as $role) {
 
 <?php else: ?>
 <!-- Admin/HR Manager Dashboard Content -->
-<div class="row">
-    <div class="col-12">
-        <div class="mb-2">
-            <h1 class="h3 mb-1">
-                <?php if ($auth->isHRManager()): ?>
-                    HR Manager Dashboard
-                <?php elseif ($auth->isAdmin()): ?>
-                    Admin Dashboard
-                <?php else: ?>
-                    HR Dashboard
-                <?php endif; ?>
-            </h1>
-            <p class="text-muted">
-                <?php if ($auth->isHRManager()): ?>
-                    🎯 Manage competencies, evaluations, training programs, and employee development initiatives.
-                <?php elseif ($auth->isAdmin()): ?>
-                    ⚙️ Monitor system performance, manage users, and oversee all HR operations.
-                <?php else: ?>
-                    Welcome to your Human Resources Management System
-                <?php endif; ?>
-            </p>
-        </div>
+<div class="row dashboard-header">
+    <div class="col-lg-8">
+        <h1 class="h3 mb-1 title">
+            <?php if ($auth->isHRManager()): ?>
+                HR Manager Dashboard
+            <?php elseif ($auth->isAdmin()): ?>
+                Admin Dashboard
+            <?php else: ?>
+                HR Dashboard
+            <?php endif; ?>
+        </h1>
+        <p class="text-muted subtitle">
+            <?php if ($auth->isHRManager()): ?>
+                Manage competencies, evaluations, training programs, and employee development initiatives.
+            <?php elseif ($auth->isAdmin()): ?>
+                Monitor system performance, manage users, and oversee HR operations.
+            <?php else: ?>
+                Welcome to your Human Resources Management System.
+            <?php endif; ?>
+        </p>
     </div>
+    <div class="col-lg-4 text-lg-right text-muted small"></div>
 </div>
 
 <!-- Stats Cards -->
-<div class="row">
+<div class="row dashboard-metrics">
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1329,7 +1435,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1345,7 +1451,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1361,7 +1467,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1379,9 +1485,9 @@ foreach ($criticalRoles as $role) {
 </div>
 
 <!-- Additional Stats Row -->
-<div class="row">
+<div class="row dashboard-section">
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1397,7 +1503,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1413,7 +1519,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1431,9 +1537,9 @@ foreach ($criticalRoles as $role) {
 </div>
 
 <!-- Additional Statistics Row -->
-<div class="row">
+<div class="row dashboard-section">
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1449,7 +1555,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1465,7 +1571,7 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
     <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
+        <div class="card shadow dashboard-metric-card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col">
@@ -1480,26 +1586,10 @@ foreach ($criticalRoles as $role) {
             </div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-3 mb-4">
-        <div class="card shadow">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <h6 class="text-uppercase text-muted mb-2">System Status</h6>
-                        <span class="h2 mb-0">Online</span>
-                        <span class="badge badge-success ml-2">Healthy</span>
-                    </div>
-                    <div class="col-auto">
-                        <span class="fe fe-server fe-24 text-muted"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Charts and Recent Activity -->
-<div class="row">
+<div class="row dashboard-section">
     <div class="col-md-8 mb-4">
         <div class="card shadow">
             <div class="card-header">
@@ -1517,7 +1607,7 @@ foreach ($criticalRoles as $role) {
             </div>
             <div class="card-body">
                 <?php if (empty($department_stats)): ?>
-                    <div class="text-center text-muted py-4">
+                    <div class="text-center text-muted py-4 dashboard-empty">
                         <i class="fe fe-building fe-48 mb-3"></i>
                         <p>No department data available.</p>
                     </div>
@@ -1535,7 +1625,7 @@ foreach ($criticalRoles as $role) {
 
 <?php if ($auth->hasPermission('manage_system')): ?>
 <!-- Admin Announcements Management -->
-<div class="row mb-4">
+<div class="row mb-4 dashboard-section">
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -1546,7 +1636,7 @@ foreach ($criticalRoles as $role) {
             </div>
             <div class="card-body">
                 <?php if (empty($announcements)): ?>
-                    <div class="text-center text-muted py-4">
+                    <div class="text-center text-muted py-4 dashboard-empty">
                         <i class="fe fe-megaphone fe-48 mb-3"></i>
                         <p>No announcements found.</p>
                     </div>
@@ -1608,7 +1698,7 @@ foreach ($criticalRoles as $role) {
 
 <?php if ($auth->isHRManager() && $hr_manager): ?>
 <!-- HR Manager Alerts -->
-<div class="row mb-4">
+<div class="row mb-4 dashboard-section">
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header">
@@ -1621,7 +1711,7 @@ foreach ($criticalRoles as $role) {
                 <?php 
                 $hr_alerts = $hr_manager->getHRAlerts();
                 if (empty($hr_alerts)): ?>
-                    <div class="text-center text-muted py-3">
+                    <div class="text-center text-muted py-3 dashboard-empty">
                         <i class="fe fe-check-circle fe-24 mb-2 text-success"></i>
                         <p class="mb-0">All caught up! No urgent alerts at this time.</p>
                     </div>
@@ -1652,48 +1742,9 @@ foreach ($criticalRoles as $role) {
 </div>
 <?php endif; ?>
 
-<!-- Recent Activities and Quick Actions -->
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card shadow">
-            <div class="card-header">
-                <strong class="card-title">Recent Activities</strong>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    <?php if (empty($recent_activities)): ?>
-                        <div class="list-group-item px-0 text-center text-muted">
-                            <i class="fe fe-activity fe-48 mb-3"></i>
-                            <p>No recent activities found.</p>
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($recent_activities as $activity): ?>
-                            <div class="list-group-item px-0">
-                                <div class="row align-items-center">
-                                    <div class="col-auto">
-                                        <span class="fe fe-<?php echo getActivityIcon($activity['action']); ?> fe-16 text-primary"></span>
-                                    </div>
-                                    <div class="col">
-                                        <strong><?php echo htmlspecialchars($activity['action']); ?></strong>
-                                        <div class="text-muted small">
-                                            <?php echo htmlspecialchars($activity['first_name'] . ' ' . $activity['last_name']); ?>
-                                            <?php if (isset($activity['table_name']) && $activity['table_name']): ?>
-                                                - <?php echo htmlspecialchars($activity['table_name']); ?>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    <div class="col-auto">
-                                        <small class="text-muted"><?php echo timeAgo($activity['created_at']); ?></small>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 mb-4">
+<!-- Quick Actions -->
+<div class="row dashboard-section">
+    <div class="col-12 mb-4">
         <div class="card shadow">
             <div class="card-header">
                 <strong class="card-title">
@@ -1710,25 +1761,25 @@ foreach ($criticalRoles as $role) {
                 <div class="row">
                     <?php if ($auth->isHRManager()): ?>
                         <!-- HR Manager Actions -->
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=competency_models" class="btn btn-outline-primary btn-block">
                                 <span class="fe fe-target fe-16 mr-2"></span>
                                 Competency Models
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=evaluation_cycles" class="btn btn-outline-secondary btn-block">
                                 <span class="fe fe-bar-chart-2 fe-16 mr-2"></span>
                                 Evaluation Cycles
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=learning_management_enhanced" class="btn btn-outline-success btn-block">
                                 <span class="fe fe-book-open fe-16 mr-2"></span>
                                 Learning Management
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=training_requests" class="btn btn-outline-warning btn-block">
                                 <span class="fe fe-file-text fe-16 mr-2"></span>
                                 Training Requests
@@ -1737,25 +1788,25 @@ foreach ($criticalRoles as $role) {
                                 <?php endif; ?>
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=succession_planning" class="btn btn-outline-info btn-block">
                                 <span class="fe fe-trending-up fe-16 mr-2"></span>
                                 Succession Planning
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=hr_employee_management" class="btn btn-outline-dark btn-block">
                                 <span class="fe fe-users fe-16 mr-2"></span>
                                 Employee Management
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=hr_reports" class="btn btn-outline-purple btn-block">
                                 <span class="fe fe-pie-chart fe-16 mr-2"></span>
                                 HR Reports
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=evaluations" class="btn btn-outline-teal btn-block">
                                 <span class="fe fe-clipboard fe-16 mr-2"></span>
                                 Manage Evaluations
@@ -1763,25 +1814,25 @@ foreach ($criticalRoles as $role) {
                         </div>
                     <?php elseif ($auth->isAdmin()): ?>
                         <!-- Admin Actions -->
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=user_management" class="btn btn-outline-primary btn-block">
                                 <span class="fe fe-user-plus fe-16 mr-2"></span>
                                 Manage Users
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=system_settings" class="btn btn-outline-success btn-block">
                                 <span class="fe fe-settings fe-16 mr-2"></span>
                                 System Settings
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=system_logs" class="btn btn-outline-info btn-block">
                                 <span class="fe fe-file-text fe-16 mr-2"></span>
                                 System Logs
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=reports" class="btn btn-outline-warning btn-block">
                                 <span class="fe fe-bar-chart-2 fe-16 mr-2"></span>
                                 Generate Reports
@@ -1789,25 +1840,25 @@ foreach ($criticalRoles as $role) {
                         </div>
                     <?php else: ?>
                         <!-- Default Actions -->
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=employee_self_service" class="btn btn-outline-primary btn-block">
                                 <span class="fe fe-user-plus fe-16 mr-2"></span>
                                 Add Employee
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=training_management" class="btn btn-outline-success btn-block">
                                 <span class="fe fe-book-open fe-16 mr-2"></span>
                                 Schedule Training
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=recruitment" class="btn btn-outline-info btn-block">
                                 <span class="fe fe-briefcase fe-16 mr-2"></span>
                                 Post Job
                             </a>
                         </div>
-                        <div class="col-6 mb-3">
+                        <div class="col-6 col-lg-3 mb-3">
                             <a href="?page=hr_reports" class="btn btn-outline-warning btn-block">
                                 <span class="fe fe-bar-chart-2 fe-16 mr-2"></span>
                                 Generate Report
@@ -1819,7 +1870,6 @@ foreach ($criticalRoles as $role) {
         </div>
     </div>
 </div>
-
 <!-- Recent Training Requests -->
 <div class="row">
     <div class="col-12">
@@ -1834,7 +1884,7 @@ foreach ($criticalRoles as $role) {
             </div>
             <div class="card-body">
                 <?php if (empty($recent_training_requests)): ?>
-                    <div class="text-center text-muted py-4">
+                    <div class="text-center text-muted py-4 dashboard-empty">
                         <i class="fe fe-book-open fe-48 mb-3"></i>
                         <p class="mb-0">No training requests found.</p>
                         <small>Training requests will appear here once employees submit them.</small>
@@ -1881,55 +1931,6 @@ foreach ($criticalRoles as $role) {
                         </table>
                     </div>
                 <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Upcoming Events -->
-<div class="row">
-    <div class="col-12">
-        <div class="card shadow">
-            <div class="card-header">
-                <strong class="card-title">Upcoming Events</strong>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Event</th>
-                                <th>Date</th>
-                                <th>Participants</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>Leadership Training Workshop</strong></td>
-                                <td>Dec 15, 2024</td>
-                                <td>25 employees</td>
-                                <td><span class="badge badge-success">Confirmed</span></td>
-                                <td><a href="#" class="btn btn-sm btn-outline-primary">View Details</a></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Performance Review Meeting</strong></td>
-                                <td>Dec 18, 2024</td>
-                                <td>12 managers</td>
-                                <td><span class="badge badge-warning">Pending</span></td>
-                                <td><a href="#" class="btn btn-sm btn-outline-primary">View Details</a></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Company All-Hands Meeting</strong></td>
-                                <td>Dec 20, 2024</td>
-                                <td>All employees</td>
-                                <td><span class="badge badge-info">Scheduled</span></td>
-                                <td><a href="#" class="btn btn-sm btn-outline-primary">View Details</a></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </div>
     </div>
@@ -1987,6 +1988,7 @@ const departmentChart = new Chart(ctx2, {
     }
 });
 <?php endif; ?>
+</script>
 
 <?php if ($auth->hasPermission('manage_system')): ?>
 <!-- Create Announcement Modal -->
@@ -2152,3 +2154,9 @@ function deleteAnnouncement(announcementId) {
 </script>
 <?php endif; ?>
 <?php endif; ?>
+
+
+
+
+
+

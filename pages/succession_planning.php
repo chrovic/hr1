@@ -70,6 +70,9 @@ $availableEmployees = $successionManager->getAvailableEmployees();
         <button type="button" class="btn btn-success" data-toggle="modal" data-target="#assignCandidateModal">
             <i class="fe fe-users fe-16 mr-2"></i>Assign Candidate
         </button>
+        <a href="?page=succession_plans" class="btn btn-outline-primary">
+            <i class="fe fe-clipboard fe-16 mr-2"></i>Succession Plans
+        </a>
     </div>
 </div>
 
@@ -174,7 +177,9 @@ $availableEmployees = $successionManager->getAvailableEmployees();
                                                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRole(<?php echo $role['id']; ?>)">
                                                     <i class="fe fe-eye fe-14"></i>
                                                 </button>
-                                                
+                                                <a href="?page=succession_pipeline&role_id=<?php echo (int)$role['id']; ?>" class="btn btn-sm btn-outline-info">
+                                                    <i class="fe fe-activity fe-14"></i>
+                                                </a>
                                                 <button type="button" class="btn btn-sm btn-outline-warning" data-toggle="modal" data-target="#editRoleModal" onclick='editRole(<?php echo json_encode($role, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>)'>
                                                     <i class="fe fe-edit fe-14"></i>
                                                 </button>

@@ -173,6 +173,49 @@ try {
         font-size: 12px;
         line-height: 1.4;
     }
+
+    body.dark .notification-dropdown,
+    .dark .notification-dropdown {
+        background: #1e2428;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    body.dark .notification-dropdown .dropdown-header,
+    .dark .notification-dropdown .dropdown-header {
+        color: #e9ecef;
+    }
+
+    body.dark .notification-dropdown .dropdown-divider,
+    .dark .notification-dropdown .dropdown-divider {
+        border-top-color: rgba(255, 255, 255, 0.08);
+    }
+
+    body.dark .notification-item,
+    .dark .notification-item {
+        color: #e9ecef;
+    }
+
+    body.dark .notification-item:hover,
+    .dark .notification-item:hover {
+        background-color: rgba(255, 255, 255, 0.06);
+    }
+
+    body.dark .notification-item.unread,
+    .dark .notification-item.unread {
+        background-color: rgba(33, 150, 243, 0.18);
+        border-left-color: #2196f3;
+    }
+
+    body.dark .notification-item h6,
+    .dark .notification-item h6 {
+        color: #f1f3f5;
+    }
+
+    body.dark .notification-item .text-muted,
+    .dark .notification-item .text-muted {
+        color: rgba(255, 255, 255, 0.65) !important;
+    }
     </style>
     
     <script>
@@ -363,10 +406,16 @@ try {
                 if (data.success) {
                     // Update unread count
                     updateUnreadCountDisplay(data.unreadCount);
-                    
-                    // Show notification if there are new ones
+
+                    // Show notification if there are new ones, but only once per session
                     if (data.newNotifications > 0) {
-                        showNewNotificationAlert(data.newNotifications);
+                        const lastAlertKey = 'lastNotificationAlerted';
+                        const lastAlerted = sessionStorage.getItem(lastAlertKey);
+
+                        if (data.lastCheck && data.lastCheck !== lastAlerted) {
+                            showNewNotificationAlert(data.newNotifications);
+                            sessionStorage.setItem(lastAlertKey, data.lastCheck);
+                        }
                     }
                 }
             })
@@ -394,36 +443,8 @@ try {
         }
     }
     
-    function showNewNotificationAlert(count) {
-        // Create a subtle notification alert
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-info alert-dismissible fade show position-fixed';
-        alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
-        alert.innerHTML = `
-            <i class="fe fe-bell fe-16 mr-2"></i>
-            <strong>${count} new notification${count > 1 ? 's' : ''}</strong>
-            <button type="button" class="close" data-dismiss="alert">
-                <span>&times;</span>
-            </button>
-        `;
-        
-        document.body.appendChild(alert);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (alert.parentNode) {
-                alert.remove();
-            }
-        }, 5000);
-    }
-    
-    // Auto-check for new notifications every 10 seconds
-    setInterval(checkForNewNotifications, 10000);
-    
-    // Initial check on load
-    document.addEventListener('DOMContentLoaded', function() {
-        checkForNewNotifications();
-    });
+    // Auto-check for new notifications every 30 seconds (no popup)
+    setInterval(checkForNewNotifications, 30000);
     </script>
     <?php
 } catch (Exception $e) {

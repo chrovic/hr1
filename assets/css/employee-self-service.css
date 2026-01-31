@@ -219,6 +219,50 @@
     flex: 1;
 }
 
+/* Dark mode overrides */
+body.dark .personal-info-card,
+.dark .personal-info-card,
+body.dark .quick-action-card,
+.dark .quick-action-card,
+body.dark .requests-list,
+.dark .requests-list {
+    background: #1e2428;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+body.dark .request-item,
+.dark .request-item {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .request-item:hover,
+.dark .request-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+body.dark .info-form-label,
+.dark .info-form-label {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+body.dark .info-form-control,
+.dark .info-form-control {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
+body.dark .info-form-control[readonly],
+.dark .info-form-control[readonly] {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .quick-action-card:hover,
+.dark .quick-action-card:hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
 .request-title {
     font-weight: 600;
     margin-bottom: 0.25rem;

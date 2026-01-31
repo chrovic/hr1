@@ -16,19 +16,49 @@ if ($auth->isLoggedIn()) {
 if ($_POST) {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
+    $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
     
     if (empty($username) || empty($password)) {
         $error = 'Please enter both username and password.';
+    } elseif (empty($recaptchaResponse)) {
+        $error = 'Please complete the reCAPTCHA verification.';
     } else {
-        $result = $auth->login($username, $password, false);
-        
-        if ($result === true) {
-            // Login successful
-            header('Location: ../index.php');
-            exit;
+        $secretKey = '6LeZV1wsAAAAAK07SuJYRE7NtyrAVt0uJ5cWndhG';
+        $verifyResponse = null;
+        try {
+            $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+            $postData = http_build_query([
+                'secret' => $secretKey,
+                'response' => $recaptchaResponse,
+                'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
+            ]);
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+                    'content' => $postData,
+                    'timeout' => 10
+                ]
+            ]);
+            $verifyRaw = file_get_contents($verifyUrl, false, $context);
+            $verifyResponse = $verifyRaw ? json_decode($verifyRaw, true) : null;
+        } catch (Exception $e) {
+            $verifyResponse = null;
+        }
+
+        if (!$verifyResponse || empty($verifyResponse['success'])) {
+            $error = 'reCAPTCHA verification failed. Please try again.';
         } else {
-            // Login failed
-            $error = 'Invalid username or password. Please try again.';
+            $result = $auth->login($username, $password, false);
+            
+            if ($result === true) {
+                // Login successful
+                header('Location: ../index.php');
+                exit;
+            } else {
+                // Login failed
+                $error = 'Invalid username or password. Please try again.';
+            }
         }
     }
 }
@@ -47,6 +77,7 @@ if ($_POST) {
     <link rel="stylesheet" href="../assets/vendor/css/simplebar.css">
     <link rel="stylesheet" href="../assets/vendor/css/feather.css">
     <link rel="stylesheet" href="../assets/vendor/css/app-light.css">
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="../assets/css/hr-main.css">
@@ -409,6 +440,10 @@ if ($_POST) {
                     <label for="password" class="form-label">Password</label>
                     <input type="password" class="form-control" id="password" name="password" 
                            placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+
+                <div class="form-group" style="display:flex; justify-content:center;">
+                    <div class="g-recaptcha" data-sitekey="6LeZV1wsAAAAAJYIiez6oL4YuH1y9K6S_XAUJrFI"></div>
                 </div>
 
                 <button type="submit" class="btn btn-login" id="loginBtn">

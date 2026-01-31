@@ -72,7 +72,7 @@ $date_range = $_GET['date_range'] ?? '30';
                                 <span class="fe fe-refresh-cw fe-16 mr-2"></span>
                                 Generate Report
                             </button>
-                            <button type="button" class="btn btn-outline-secondary ml-2" onclick="exportReport()">
+                            <button type="button" class="btn btn-outline-secondary ml-2" id="exportHrReportBtn" data-report="<?php echo htmlspecialchars($report_type); ?>" data-date-range="<?php echo htmlspecialchars($date_range); ?>">
                                 <span class="fe fe-download fe-16 mr-2"></span>
                                 Export
                             </button>
@@ -329,9 +329,94 @@ $date_range = $_GET['date_range'] ?? '30';
 </div>
 
 <script>
-function exportReport() {
-    // Export functionality will be implemented here
-    alert('Export functionality will be implemented');
-}
+document.addEventListener('DOMContentLoaded', function() {
+    var exportBtn = document.getElementById('exportHrReportBtn');
+    if (!exportBtn) {
+        return;
+    }
+
+    var modalHtml = '\
+    <div class=\"modal fade\" id=\"exportHrReportModal\" tabindex=\"-1\" role=\"dialog\">\
+        <div class=\"modal-dialog\" role=\"document\">\
+            <div class=\"modal-content\">\
+                <div class=\"modal-header\">\
+                    <h5 class=\"modal-title\">Confirm Export</h5>\
+                    <button type=\"button\" class=\"close\" data-dismiss=\"modal\"><span>&times;</span></button>\
+                </div>\
+                <div class=\"modal-body\">\
+                    <p class=\"mb-3\">Enter your password to export this report.</p>\
+                    <div class=\"form-group mb-0\">\
+                        <label for=\"export_hr_password\">Password</label>\
+                        <input type=\"password\" class=\"form-control\" id=\"export_hr_password\" placeholder=\"Enter your password\" required>\
+                        <div class=\"invalid-feedback\">Password is required.</div>\
+                    </div>\
+                    <div class=\"text-danger small mt-2 d-none\" id=\"export_hr_error\">Incorrect password.</div>\
+                </div>\
+                <div class=\"modal-footer\">\
+                    <button type=\"button\" class=\"btn btn-secondary\" data-dismiss=\"modal\">Cancel</button>\
+                    <button type=\"button\" class=\"btn btn-primary\" id=\"confirmHrExportBtn\">Verify & Export</button>\
+                </div>\
+            </div>\
+        </div>\
+    </div>';
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    var exportModal = $('#exportHrReportModal');
+    var passwordInput = document.getElementById('export_hr_password');
+    var errorMsg = document.getElementById('export_hr_error');
+    var confirmBtn = document.getElementById('confirmHrExportBtn');
+
+    exportBtn.addEventListener('click', function() {
+        if (passwordInput) {
+            passwordInput.value = '';
+            passwordInput.classList.remove('is-invalid');
+        }
+        if (errorMsg) {
+            errorMsg.classList.add('d-none');
+        }
+        exportModal.modal('show');
+    });
+
+    confirmBtn.addEventListener('click', function() {
+        var password = passwordInput ? passwordInput.value.trim() : '';
+        if (!password) {
+            if (passwordInput) {
+                passwordInput.classList.add('is-invalid');
+            }
+            return;
+        }
+        if (passwordInput) {
+            passwordInput.classList.remove('is-invalid');
+        }
+        if (errorMsg) {
+            errorMsg.classList.add('d-none');
+        }
+
+        fetch('ajax/verify_password.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'password=' + encodeURIComponent(password)
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data && data.success) {
+                exportModal.modal('hide');
+                var report = exportBtn.getAttribute('data-report') || 'overview';
+                var dateRange = exportBtn.getAttribute('data-date-range') || '30';
+                window.location.href = 'ajax/hr_reports_export.php?report=' + encodeURIComponent(report) + '&date_range=' + encodeURIComponent(dateRange);
+            } else if (errorMsg) {
+                errorMsg.textContent = (data && data.message) ? data.message : 'Incorrect password.';
+                errorMsg.classList.remove('d-none');
+            }
+        })
+        .catch(function() {
+            if (errorMsg) {
+                errorMsg.textContent = 'Verification failed. Please try again.';
+                errorMsg.classList.remove('d-none');
+            }
+        });
+    });
+});
 </script>
 

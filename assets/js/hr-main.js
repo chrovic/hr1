@@ -14,7 +14,11 @@ class HRSystem {
         // Theme switcher
         const modeSwitcher = document.getElementById('modeSwitcher');
         if (modeSwitcher) {
-            modeSwitcher.addEventListener('click', this.toggleTheme.bind(this));
+            modeSwitcher.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                this.toggleTheme();
+            }, true);
         }
 
         // Sidebar toggle
@@ -36,7 +40,7 @@ class HRSystem {
         
         // Initialize dropdowns
         this.initDropdowns();
-        
+
         // Initialize progress bars
         this.initProgressBars();
     }
@@ -59,12 +63,16 @@ class HRSystem {
             lightTheme.disabled = false;
             darkTheme.disabled = true;
             modeSwitcher.innerHTML = '<i class="fe fe-sun fe-16"></i>';
-            localStorage.setItem('theme', 'light');
+            localStorage.setItem('mode', 'light');
+            document.body.classList.remove('dark');
+            document.body.classList.add('light');
         } else {
             lightTheme.disabled = true;
             darkTheme.disabled = false;
             modeSwitcher.innerHTML = '<i class="fe fe-moon fe-16"></i>';
-            localStorage.setItem('theme', 'dark');
+            localStorage.setItem('mode', 'dark');
+            document.body.classList.add('dark');
+            document.body.classList.remove('light');
         }
     }
 
@@ -155,15 +163,13 @@ class HRSystem {
     }
 
     initDropdowns() {
-        console.log('Initializing dropdowns...');
-        
         // Initialize Bootstrap dropdowns with proper event handling
         const dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
-        console.log('Found dropdown elements:', dropdownElementList.length);
         
         dropdownElementList.forEach(function (dropdownToggleEl, index) {
-            console.log(`Setting up dropdown ${index}:`, dropdownToggleEl);
-            
+            if (dropdownToggleEl.id === 'profileDropdown' || dropdownToggleEl.id === 'notificationDropdown') {
+                return;
+            }
             // Remove any existing event listeners
             if (dropdownToggleEl._dropdownHandler) {
                 dropdownToggleEl.removeEventListener('click', dropdownToggleEl._dropdownHandler);
@@ -174,14 +180,10 @@ class HRSystem {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                console.log('Dropdown clicked:', dropdownToggleEl);
-                
                 const dropdownMenu = dropdownToggleEl.nextElementSibling;
-                console.log('Dropdown menu:', dropdownMenu);
                 
                 if (dropdownMenu && dropdownMenu.classList.contains('dropdown-menu')) {
                     const isOpen = dropdownMenu.classList.contains('show');
-                    console.log('Dropdown is currently open:', isOpen);
                     
                     // Close all other dropdowns
                     document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
@@ -198,20 +200,15 @@ class HRSystem {
                     if (isOpen) {
                         dropdownMenu.classList.remove('show');
                         dropdownToggleEl.setAttribute('aria-expanded', 'false');
-                        console.log('Closing dropdown');
                     } else {
                         dropdownMenu.classList.add('show');
                         dropdownToggleEl.setAttribute('aria-expanded', 'true');
-                        console.log('Opening dropdown');
                     }
-                } else {
-                    console.error('Dropdown menu not found or invalid');
                 }
             };
             
             // Add event listener
             dropdownToggleEl.addEventListener('click', dropdownToggleEl._dropdownHandler);
-            console.log('Event listener added to dropdown', index);
         });
         
         // Close dropdowns when clicking outside
@@ -234,53 +231,54 @@ class HRSystem {
     initSidebarCollapses() {
         // Wait a bit for DOM to be fully ready
         setTimeout(() => {
+            const layoutRoot = document.querySelector('.vertical');
             const collapseToggles = document.querySelectorAll('[data-toggle="collapse"]');
-            console.log('Found collapse toggles:', collapseToggles.length);
-            
-            if (collapseToggles.length === 0) {
-                console.log('No collapse toggles found, trying alternative selectors...');
-                // Try alternative selectors
-                const altToggles = document.querySelectorAll('.dropdown-toggle');
-                console.log('Found dropdown toggles:', altToggles.length);
-            }
-            
-            collapseToggles.forEach((toggle, index) => {
-                console.log(`Setting up toggle ${index}:`, toggle);
-                
-                toggle.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    console.log('Collapse toggle clicked:', toggle);
-                    
-                    const targetId = toggle.getAttribute('href');
-                    const target = document.querySelector(targetId);
-                    console.log('Target element:', target);
-                    
-                    if (target) {
-                        // Toggle the collapse
-                        const isCurrentlyShown = target.classList.contains('show');
-                        target.classList.toggle('show');
-                        
-                        // Update aria-expanded
-                        const isExpanded = target.classList.contains('show');
-                        toggle.setAttribute('aria-expanded', isExpanded);
-                        
-                        // Add/remove active class to parent
-                        const parentItem = toggle.closest('.nav-item');
-                        if (parentItem) {
-                            if (isExpanded) {
-                                parentItem.classList.add('active');
-                            } else {
-                                parentItem.classList.remove('active');
-                            }
-                        }
-                        
-                        console.log('Collapse toggled, isExpanded:', isExpanded);
-                    } else {
-                        console.error('Target element not found for:', targetId);
+            let hoverTimeout;
+
+            const isCollapsed = () =>
+                layoutRoot && (layoutRoot.classList.contains('collapsed') || layoutRoot.classList.contains('narrow'));
+
+            const closeAll = (exceptTarget) => {
+                document.querySelectorAll('.sidebar-left .collapse.show').forEach(panel => {
+                    if (panel !== exceptTarget) {
+                        panel.classList.remove('show');
                     }
                 });
+                document.querySelectorAll('.sidebar-left [data-toggle="collapse"]').forEach(t => {
+                    if (!exceptTarget || t.getAttribute('href') !== `#${exceptTarget.id}`) {
+                        t.setAttribute('aria-expanded', 'false');
+                    }
+                });
+            };
+
+            collapseToggles.forEach((toggle) => {
+                toggle.addEventListener('click', (e) => {
+                    if (isCollapsed()) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const targetId = toggle.getAttribute('href');
+                    const target = document.querySelector(targetId);
+
+                    if (target) {
+                        const isCurrentlyShown = target.classList.contains('show');
+                        target.classList.toggle('show');
+                        const isExpanded = target.classList.contains('show');
+                        toggle.setAttribute('aria-expanded', isExpanded);
+
+                        const parentItem = toggle.closest('.nav-item');
+                        if (parentItem) {
+                            parentItem.classList.toggle('active', isExpanded);
+                        }
+                    }
+                });
+
+                // Removed hover-open behavior for collapsed sidebar.
             });
         }, 100);
     }
@@ -347,57 +345,23 @@ class HRSystem {
 document.addEventListener('DOMContentLoaded', function() {
     window.hrSystem = new HRSystem();
     
-    // Load saved theme
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
+    // Load saved mode
+    const savedMode = localStorage.getItem('mode');
+    if (savedMode === 'dark') {
         document.getElementById('lightTheme').disabled = true;
         document.getElementById('darkTheme').disabled = false;
         document.getElementById('modeSwitcher').innerHTML = '<i class="fe fe-moon fe-16"></i>';
+        document.body.classList.add('dark');
+        document.body.classList.remove('light');
+    } else if (savedMode === 'light') {
+        document.getElementById('lightTheme').disabled = false;
+        document.getElementById('darkTheme').disabled = true;
+        document.getElementById('modeSwitcher').innerHTML = '<i class="fe fe-sun fe-16"></i>';
+        document.body.classList.remove('dark');
+        document.body.classList.add('light');
     }
     
-    // Simple dropdown fix - direct approach
-    setTimeout(function() {
-        console.log('Setting up simple dropdown fix...');
-        
-        const dropdownToggle = document.querySelector('#navbarDropdownMenuLink');
-        const dropdownMenu = document.querySelector('.dropdown-menu');
-        
-        console.log('Dropdown toggle:', dropdownToggle);
-        console.log('Dropdown menu:', dropdownMenu);
-        
-        if (dropdownToggle && dropdownMenu) {
-            dropdownToggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                console.log('Dropdown clicked!');
-                
-                const isOpen = dropdownMenu.classList.contains('show');
-                
-                if (isOpen) {
-                    dropdownMenu.classList.remove('show');
-                    dropdownToggle.setAttribute('aria-expanded', 'false');
-                    console.log('Closing dropdown');
-                } else {
-                    dropdownMenu.classList.add('show');
-                    dropdownToggle.setAttribute('aria-expanded', 'true');
-                    console.log('Opening dropdown');
-                }
-            });
-            
-            // Close when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                    dropdownMenu.classList.remove('show');
-                    dropdownToggle.setAttribute('aria-expanded', 'false');
-                }
-            });
-            
-            console.log('Simple dropdown fix applied!');
-        } else {
-            console.error('Dropdown elements not found!');
-        }
-    }, 1000);
+    // Removed extra dropdown patching to avoid conflicts.
 });
 
 // Export for use in other modules

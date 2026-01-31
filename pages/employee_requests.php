@@ -21,11 +21,12 @@ if ($_POST) {
     if (isset($_POST['create_request'])) {
         $requestData = [
             'employee_id' => $current_user['id'],
-            'request_type_id' => $_POST['request_type_id'],
+            'request_type_id' => $_POST['request_type_id'] ?? null,
+            'request_type' => $_POST['request_type'] ?? null,
             'title' => $_POST['title'],
             'description' => $_POST['description'],
-            'priority' => $_POST['priority'],
-            'requested_date' => $_POST['requested_date'],
+            'priority' => $_POST['priority'] ?? 'medium',
+            'requested_date' => $_POST['requested_date'] ?? date('Y-m-d'),
             'requested_start_date' => $_POST['requested_start_date'] ?: null,
             'requested_end_date' => $_POST['requested_end_date'] ?: null,
             'requires_approval' => true,
@@ -148,7 +149,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-warning"><?php echo count(array_filter($allRequests, function($r) { return $r['status'] == 'pending'; })); ?></h5>
+                        <h5 class="card-title text-warning"><?php echo count(array_filter($allRequests, function($r) { return ($r['status'] ?? '') === 'pending'; })); ?></h5>
                         <p class="card-text">Pending</p>
                     </div>
                 </div>
@@ -156,7 +157,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-success"><?php echo count(array_filter($allRequests, function($r) { return $r['status'] == 'approved'; })); ?></h5>
+                        <h5 class="card-title text-success"><?php echo count(array_filter($allRequests, function($r) { return ($r['status'] ?? '') === 'approved'; })); ?></h5>
                         <p class="card-text">Approved</p>
                     </div>
                 </div>
@@ -164,7 +165,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-danger"><?php echo count(array_filter($allRequests, function($r) { return $r['status'] == 'rejected'; })); ?></h5>
+                        <h5 class="card-title text-danger"><?php echo count(array_filter($allRequests, function($r) { return ($r['status'] ?? '') === 'rejected'; })); ?></h5>
                         <p class="card-text">Rejected</p>
                     </div>
                 </div>
@@ -209,8 +210,8 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <div class="font-weight-bold"><?php echo htmlspecialchars(($request['first_name'] ?? 'Unknown') . ' ' . ($request['last_name'] ?? 'User')); ?></div>
-                                                    <small class="text-muted"><?php echo htmlspecialchars($request['position'] ?? 'N/A'); ?></small>
+                                                    <div class="font-weight-bold"><?php echo htmlspecialchars(($request['employee_first_name'] ?? $request['first_name'] ?? 'Unknown') . ' ' . ($request['employee_last_name'] ?? $request['last_name'] ?? 'User')); ?></div>
+                                                    <small class="text-muted"><?php echo htmlspecialchars($request['employee_position'] ?? $request['position'] ?? 'N/A'); ?></small>
                                                 </div>
                                             </div>
                                         </td>
@@ -223,26 +224,29 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
                                         </td>
                                         <td>
                                             <?php
+                                            $priorityValue = $request['priority'] ?? 'medium';
                                             $priorityClass = [
                                                 'low' => 'badge-secondary',
                                                 'medium' => 'badge-warning',
-                                                'high' => 'badge-danger'
-                                            ][$request['priority']] ?? 'badge-secondary';
+                                                'high' => 'badge-danger',
+                                                'urgent' => 'badge-danger'
+                                            ][$priorityValue] ?? 'badge-secondary';
                                             ?>
-                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($request['priority'] ?? 'Medium'); ?></span>
+                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($priorityValue); ?></span>
                                         </td>
                                         <td>
                                             <?php
+                                            $statusValue = $request['status'] ?? 'pending';
                                             $statusClass = [
                                                 'pending' => 'badge-warning',
                                                 'approved' => 'badge-success',
                                                 'rejected' => 'badge-danger',
                                                 'cancelled' => 'badge-secondary'
-                                            ][$request['status']] ?? 'badge-secondary';
+                                            ][$statusValue] ?? 'badge-secondary';
                                             ?>
-                                            <span class="badge <?php echo $statusClass; ?>"><?php echo ucfirst($request['status'] ?? 'Unknown'); ?></span>
+                                            <span class="badge <?php echo $statusClass; ?>"><?php echo ucfirst((string)$statusValue); ?></span>
                                         </td>
-                                        <td><?php echo htmlspecialchars($request['department'] ?? 'N/A'); ?></td>
+                                        <td><?php echo htmlspecialchars($request['employee_department'] ?? $request['department'] ?? 'N/A'); ?></td>
                                         <td><?php echo $request['created_at'] ? date('M d, Y', strtotime($request['created_at'])) : 'N/A'; ?></td>
                                         <td>
                                             <div class="btn-group" role="group">
@@ -283,7 +287,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-warning"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'pending'; })); ?></h5>
+                        <h5 class="card-title text-warning"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'pending'; })); ?></h5>
                         <p class="card-text">Pending</p>
                     </div>
                 </div>
@@ -291,7 +295,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-success"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'approved'; })); ?></h5>
+                        <h5 class="card-title text-success"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'approved'; })); ?></h5>
                         <p class="card-text">Approved</p>
                     </div>
                 </div>
@@ -299,7 +303,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
-                        <h5 class="card-title text-danger"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'rejected'; })); ?></h5>
+                        <h5 class="card-title text-danger"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'rejected'; })); ?></h5>
                         <p class="card-text">Rejected</p>
                     </div>
                 </div>
@@ -319,7 +323,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-warning"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'pending'; })); ?></h5>
+        <h5 class="card-title text-warning"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'pending'; })); ?></h5>
                 <p class="card-text">Pending</p>
             </div>
         </div>
@@ -327,7 +331,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-success"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'approved'; })); ?></h5>
+        <h5 class="card-title text-success"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'approved'; })); ?></h5>
                 <p class="card-text">Approved</p>
             </div>
         </div>
@@ -335,7 +339,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-danger"><?php echo count(array_filter($employeeRequests, function($r) { return $r['status'] == 'rejected'; })); ?></h5>
+        <h5 class="card-title text-danger"><?php echo count(array_filter($employeeRequests, function($r) { return ($r['status'] ?? '') === 'rejected'; })); ?></h5>
                 <p class="card-text">Rejected</p>
             </div>
         </div>
@@ -377,7 +381,7 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
                                 <?php foreach ($employeeRequests as $request): ?>
                                     <tr>
                                         <td>
-                                            <span class="badge badge-info"><?php echo htmlspecialchars($request['request_type_name']); ?></span>
+                                            <span class="badge badge-info"><?php echo htmlspecialchars($request['request_type_name'] ?? 'Unknown'); ?></span>
                                         </td>
                                         <td>
                                             <strong><?php echo htmlspecialchars($request['title']); ?></strong>
@@ -395,22 +399,26 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
                                                 case 'cancelled': $statusClass = 'badge-secondary'; break;
                                             }
                                             ?>
-                                            <span class="badge <?php echo $statusClass; ?>"><?php echo ucfirst($request['status']); ?></span>
+                                            <span class="badge <?php echo $statusClass; ?>"><?php echo ucfirst((string)($request['status'] ?? '')); ?></span>
                                         </td>
                                         <td>
                                             <?php
                                             $priorityClass = '';
-                                            switch($request['priority']) {
+                                            $priorityValue = $request['priority'] ?? 'medium';
+                                            switch($priorityValue) {
                                                 case 'low': $priorityClass = 'badge-secondary'; break;
                                                 case 'medium': $priorityClass = 'badge-info'; break;
                                                 case 'high': $priorityClass = 'badge-warning'; break;
                                                 case 'urgent': $priorityClass = 'badge-danger'; break;
                                             }
                                             ?>
-                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($request['priority']); ?></span>
+                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($priorityValue); ?></span>
                                         </td>
                                         <td>
-                                            <?php echo $request['requested_date'] ? date('M d, Y', strtotime($request['requested_date'])) : 'N/A'; ?>
+                                            <?php
+                                            $requestedDate = $request['requested_date'] ?? $request['request_date'] ?? null;
+                                            echo $requestedDate ? date('M d, Y', strtotime($requestedDate)) : 'N/A';
+                                            ?>
                                         </td>
                                         <td>
                                             <?php echo date('M d, Y', strtotime($request['created_at'])); ?>
@@ -457,14 +465,25 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="request_type_id">Request Type *</label>
-                                <select class="form-control" id="request_type_id" name="request_type_id" required>
-                                    <option value="">Select Request Type</option>
-                                    <?php foreach ($requestTypes as $type): ?>
-                                        <option value="<?php echo $type['id']; ?>">
-                                            <?php echo htmlspecialchars($type['name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <?php if (!empty($requestTypes) && isset($requestTypes[0]['id']) && is_numeric($requestTypes[0]['id'])): ?>
+                                    <select class="form-control" id="request_type_id" name="request_type_id" required>
+                                        <option value="">Select Request Type</option>
+                                        <?php foreach ($requestTypes as $type): ?>
+                                            <option value="<?php echo htmlspecialchars($type['id']); ?>">
+                                                <?php echo htmlspecialchars($type['name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                <?php else: ?>
+                                    <select class="form-control" id="request_type" name="request_type" required>
+                                        <option value="">Select Request Type</option>
+                                        <?php foreach ($requestTypes as $type): ?>
+                                            <option value="<?php echo htmlspecialchars($type['id']); ?>">
+                                                <?php echo htmlspecialchars($type['name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -593,16 +612,28 @@ $notifications = $requestManager->getUserNotifications($current_user['id'], true
 
 <script>
 function viewRequest(requestId) {
-    // Load request details via AJAX
-    fetch('?page=request_details&id=' + requestId)
+    document.getElementById('requestDetails').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+    `;
+    $('#viewRequestModal').modal('show');
+
+    fetch('ajax/request_details.php?id=' + encodeURIComponent(requestId), { credentials: 'same-origin' })
         .then(response => response.text())
         .then(html => {
             document.getElementById('requestDetails').innerHTML = html;
-            $('#viewRequestModal').modal('show');
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Failed to load request details.');
+            document.getElementById('requestDetails').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fe fe-alert-circle fe-16 mr-2"></i>
+                    Failed to load request details.
+                </div>
+            `;
         });
 }
 
@@ -614,54 +645,38 @@ function cancelRequest(requestId) {
 // Admin/HR Manager functions
 function approveRequest(requestId) {
     if (confirm('Are you sure you want to approve this request?')) {
-        fetch('includes/ajax/ajax_approve_request.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'request_id=' + requestId
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Request approved successfully!');
-                location.reload();
-            } else {
-                alert('Failed to approve request: ' + (data.message || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to approve request. Please try again.');
-        });
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="approve_request" value="1">
+            <input type="hidden" name="request_id" value="${requestId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 
 function rejectRequest(requestId) {
     const reason = prompt('Please provide a reason for rejection:');
     if (reason !== null && reason.trim() !== '') {
-        fetch('includes/ajax/ajax_reject_request.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'request_id=' + requestId + '&reason=' + encodeURIComponent(reason)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Request rejected successfully!');
-                location.reload();
-            } else {
-                alert('Failed to reject request: ' + (data.message || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to reject request. Please try again.');
-        });
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="reject_request" value="1">
+            <input type="hidden" name="request_id" value="${requestId}">
+            <input type="hidden" name="comments" value="${reason.replace(/\"/g, '&quot;')}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 
 // Set default dates
 document.addEventListener('DOMContentLoaded', function() {
     const today = new Date();
-    document.getElementById('requested_date').value = today.toISOString().split('T')[0];
+    const dateInput = document.getElementById('requested_date');
+    if (dateInput) {
+        dateInput.value = today.toISOString().split('T')[0];
+    }
 });
 </script>

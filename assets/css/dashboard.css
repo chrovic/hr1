@@ -139,8 +139,74 @@
     background-color: rgba(0, 123, 255, 0.05);
 }
 
+/* Dashboard layout refinements (no color changes) */
+.dashboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.dashboard-header .title {
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+}
+
+.dashboard-header .subtitle {
+    margin-bottom: 0;
+}
+
+.dashboard-metrics .card,
+.dashboard-section .card {
+    height: 100%;
+}
+
+.dashboard-metric-card .card-body {
+    padding: 1.25rem;
+}
+
+.dashboard-metric-card .fe {
+    font-size: 1.35rem;
+}
+
+.dashboard-metric-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+}
+
+.dashboard-metric-card .h2 {
+    font-size: 1.9rem;
+    font-weight: 700;
+}
+
+.dashboard-section .table thead th {
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+
+.dashboard-section {
+    margin-top: 1rem;
+}
+
+.dashboard-empty {
+    padding: 1.5rem;
+    border: 1px dashed rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    background: #fff;
+}
+
 /* Responsive Dashboard */
 @media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
     .dashboard-stats-card {
         margin-bottom: 1rem;
     }

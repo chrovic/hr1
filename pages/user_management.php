@@ -141,19 +141,19 @@ $users = $auth->getAllUsers();
                                             <div class="d-flex align-items-center">
                                                 <img src="assets/images/avatars/face-1.jpg" alt="Avatar" class="rounded-circle mr-2" width="32" height="32">
                                                 <div>
-                                                    <strong><?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></strong>
-                                                    <div class="text-muted small"><?php echo htmlspecialchars($user['employee_id']); ?></div>
+                                                    <strong><?php echo htmlspecialchars(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')); ?></strong>
+                                                    <div class="text-muted small"><?php echo htmlspecialchars($user['employee_id'] ?? ''); ?></div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td><?php echo htmlspecialchars($user['username']); ?></td>
-                                        <td><?php echo htmlspecialchars($user['email']); ?></td>
+                                        <td><?php echo htmlspecialchars($user['username'] ?? ''); ?></td>
+                                        <td><?php echo htmlspecialchars($user['email'] ?? ''); ?></td>
                                         <td>
                                             <span class="badge badge-<?php echo $user['role'] === 'admin' ? 'danger' : ($user['role'] === 'hr_manager' ? 'warning' : 'info'); ?>">
                                                 <?php echo ucfirst($user['role']); ?>
                                             </span>
                                         </td>
-                                        <td><?php echo htmlspecialchars($user['department']); ?></td>
+                                        <td><?php echo htmlspecialchars($user['department'] ?? ''); ?></td>
                                         <td>
                                             <span class="badge badge-<?php echo $user['status'] === 'active' ? 'success' : 'secondary'; ?>">
                                                 <?php echo ucfirst($user['status']); ?>

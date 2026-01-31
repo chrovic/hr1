@@ -137,10 +137,10 @@ try {
 </div>
 
 <style>
-.notification-dropdown {
-    border: 1px solid #dee2e6;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
+    .notification-dropdown {
+        border: 1px solid #dee2e6;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
 
 .notification-item {
     padding: 12px 16px;
@@ -170,10 +170,53 @@ try {
     line-height: 1.3;
 }
 
-.notification-item p {
-    font-size: 12px;
-    line-height: 1.4;
-}
+    .notification-item p {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    body.dark .notification-dropdown,
+    .dark .notification-dropdown {
+        background: #1e2428;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    body.dark .notification-dropdown .dropdown-header,
+    .dark .notification-dropdown .dropdown-header {
+        color: #e9ecef;
+    }
+
+    body.dark .notification-dropdown .dropdown-divider,
+    .dark .notification-dropdown .dropdown-divider {
+        border-top-color: rgba(255, 255, 255, 0.08);
+    }
+
+    body.dark .notification-item,
+    .dark .notification-item {
+        color: #e9ecef;
+    }
+
+    body.dark .notification-item:hover,
+    .dark .notification-item:hover {
+        background-color: rgba(255, 255, 255, 0.06);
+    }
+
+    body.dark .notification-item.unread,
+    .dark .notification-item.unread {
+        background-color: rgba(33, 150, 243, 0.18);
+        border-left-color: #2196f3;
+    }
+
+    body.dark .notification-item h6,
+    .dark .notification-item h6 {
+        color: #f1f3f5;
+    }
+
+    body.dark .notification-item .text-muted,
+    .dark .notification-item .text-muted {
+        color: rgba(255, 255, 255, 0.65) !important;
+    }
 </style>
 
 <script>

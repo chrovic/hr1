@@ -27,10 +27,10 @@ $roleToPages = [
 		'learning_management', 'learning_management_enhanced', 'training_management', 'training_requests', 'training_feedback_management', 'hr_learning_requests', 'dashboard'
 	],
 	'succession_manager' => [
-		'succession_planning', 'dashboard'
+		'succession_planning', 'succession_plans', 'succession_pipeline', 'candidate_details', 'succession_reports', 'dashboard'
 	],
 	'employee' => [
-		'dashboard', 'employee_self_service', 'employee_profile', 'employee_portal', 'my_evaluations', 'my_trainings', 'my_requests', 'employee_learning_materials', 'employee_learning_access', 'employee_training_requests'
+		'dashboard', 'employee_self_service', 'employee_profile', 'employee_portal', 'my_evaluations', 'evaluation_view', 'my_trainings', 'my_requests', 'employee_learning_materials', 'employee_learning_access', 'employee_training_requests'
 	]
 ];
 
@@ -402,6 +402,8 @@ if ($page === 'succession_planning' && $_POST) {
     $successionManager = new SuccessionPlanning();
     $notificationManager = new NotificationManager();
     $db = getDB();
+    $returnUrl = $_POST['return_url'] ?? null;
+    $redirectBase = (is_string($returnUrl) && strpos($returnUrl, '?page=') === 0) ? $returnUrl : '?page=succession_planning';
 
     // Create Critical Role
     if (isset($_POST['create_role'])) {
@@ -504,10 +506,10 @@ if ($page === 'succession_planning' && $_POST) {
                 }
             } catch (Exception $e) { /* ignore */ }
 
-            header('Location: ?page=succession_planning&success=candidate_assigned');
+            header('Location: ' . $redirectBase . '&success=candidate_assigned');
             exit;
         } else {
-            header('Location: ?page=succession_planning&error=candidate_assign_failed');
+            header('Location: ' . $redirectBase . '&error=candidate_assign_failed');
             exit;
         }
     }
@@ -607,10 +609,10 @@ if ($page === 'succession_planning' && $_POST) {
                 }
             } catch (Exception $e) { /* ignore */ }
 
-            header('Location: ?page=succession_planning&success=candidate_updated');
+            header('Location: ' . $redirectBase . '&success=candidate_updated');
             exit;
         } else {
-            header('Location: ?page=succession_planning&error=candidate_update_failed');
+            header('Location: ' . $redirectBase . '&error=candidate_update_failed');
             exit;
         }
     }
@@ -660,10 +662,10 @@ if ($page === 'succession_planning' && $_POST) {
                 }
             } catch (Exception $e) { /* ignore */ }
 
-            header('Location: ?page=succession_planning&success=candidate_removed');
+            header('Location: ' . $redirectBase . '&success=candidate_removed');
             exit;
         } else {
-            header('Location: ?page=succession_planning&error=candidate_remove_failed');
+            header('Location: ' . $redirectBase . '&error=candidate_remove_failed');
             exit;
         }
     }
@@ -708,6 +710,140 @@ if ($page === 'succession_planning' && $_POST) {
             exit;
         }
     }
+}
+
+// Handle succession plans form processing BEFORE any HTML output (PRG-safe)
+if ($page === 'succession_plans' && $_POST) {
+    require_once 'includes/functions/succession_planning.php';
+    require_once 'includes/functions/notification_manager.php';
+
+    $successionManager = new SuccessionPlanning();
+    $notificationManager = new NotificationManager();
+    $db = getDB();
+
+    if (isset($_POST['create_plan'])) {
+        $planData = [
+            'role_id' => $_POST['role_id'],
+            'plan_name' => $_POST['plan_name'],
+            'status' => $_POST['status'] ?? 'draft',
+            'start_date' => $_POST['start_date'] ?: null,
+            'end_date' => $_POST['end_date'] ?: null,
+            'objectives' => $_POST['objectives'] ?? null,
+            'success_metrics' => $_POST['success_metrics'] ?? null,
+            'created_by' => $current_user['id']
+        ];
+
+        if ($successionManager->createSuccessionPlan($planData)) {
+            $auth->logActivity('create_succession_plan', 'succession_plans', null, null, $planData);
+            header('Location: ?page=succession_plans&success=plan_created');
+            exit;
+        }
+        header('Location: ?page=succession_plans&error=plan_create_failed');
+        exit;
+    }
+
+    if (isset($_POST['update_plan'])) {
+        $planId = (int)($_POST['plan_id'] ?? 0);
+        $updateData = [
+            'plan_name' => $_POST['plan_name'],
+            'role_id' => $_POST['role_id'],
+            'status' => $_POST['status'] ?? 'draft',
+            'start_date' => $_POST['start_date'] ?: null,
+            'end_date' => $_POST['end_date'] ?: null,
+            'objectives' => $_POST['objectives'] ?? null,
+            'success_metrics' => $_POST['success_metrics'] ?? null
+        ];
+
+        if ($planId && $successionManager->updateSuccessionPlan($planId, $updateData)) {
+            $auth->logActivity('update_succession_plan', 'succession_plans', $planId, null, $updateData);
+            header('Location: ?page=succession_plans&success=plan_updated');
+            exit;
+        }
+        header('Location: ?page=succession_plans&error=plan_update_failed');
+        exit;
+    }
+
+    if (isset($_POST['add_plan_candidate'])) {
+        $planId = (int)($_POST['plan_id'] ?? 0);
+        $candidateId = (int)($_POST['candidate_id'] ?? 0);
+        $priorityOrder = (int)($_POST['priority_order'] ?? 1);
+        $targetReadinessDate = $_POST['target_readiness_date'] ?: null;
+        $developmentFocus = $_POST['development_focus'] ?? null;
+
+        $planRoleId = $planId ? $successionManager->getPlanRoleId($planId) : null;
+        $candidateRoleId = $candidateId ? $successionManager->getCandidateRoleId($candidateId) : null;
+
+        if ($planRoleId && $candidateRoleId && (string)$planRoleId !== (string)$candidateRoleId) {
+            header('Location: ?page=succession_plans&error=candidate_add_failed');
+            exit;
+        }
+
+        if ($planId && $candidateId && $successionManager->addPlanCandidate($planId, $candidateId, $priorityOrder, $targetReadinessDate, $developmentFocus)) {
+            $auth->logActivity('add_plan_candidate', 'succession_plan_candidates', null, null, [
+                'plan_id' => $planId,
+                'candidate_id' => $candidateId
+            ]);
+            header('Location: ?page=succession_plans&success=candidate_added');
+            exit;
+        }
+        header('Location: ?page=succession_plans&error=candidate_add_failed');
+        exit;
+    }
+
+    if (isset($_POST['remove_plan_candidate'])) {
+        $planCandidateId = (int)($_POST['plan_candidate_id'] ?? 0);
+
+        if ($planCandidateId && $successionManager->removePlanCandidate($planCandidateId)) {
+            $auth->logActivity('remove_plan_candidate', 'succession_plan_candidates', $planCandidateId, null, null);
+            header('Location: ?page=succession_plans&success=candidate_removed');
+            exit;
+        }
+        header('Location: ?page=succession_plans&error=candidate_remove_failed');
+        exit;
+    }
+}
+
+// Handle succession candidate assessment BEFORE any HTML output (PRG-safe)
+if ($page === 'candidate_details' && $_POST && isset($_POST['add_assessment'])) {
+    require_once 'includes/functions/succession_planning.php';
+
+    $successionManager = new SuccessionPlanning();
+
+    $candidateId = (int)($_POST['candidate_id'] ?? 0);
+    $technicalScore = $_POST['technical_readiness_score'] !== '' ? (int)$_POST['technical_readiness_score'] : null;
+    $leadershipScore = $_POST['leadership_readiness_score'] !== '' ? (int)$_POST['leadership_readiness_score'] : null;
+    $culturalScore = $_POST['cultural_fit_score'] !== '' ? (int)$_POST['cultural_fit_score'] : null;
+    $overallScore = $_POST['overall_readiness_score'] !== '' ? (int)$_POST['overall_readiness_score'] : null;
+    if ($overallScore === null) {
+        $scoreParts = array_filter([$technicalScore, $leadershipScore, $culturalScore], static function($value) {
+            return $value !== null;
+        });
+        if (!empty($scoreParts)) {
+            $overallScore = (int)round(array_sum($scoreParts) / count($scoreParts));
+        }
+    }
+
+    $assessmentData = [
+        'candidate_id' => $candidateId,
+        'assessor_id' => $current_user['id'],
+        'assessment_type' => $_POST['assessment_type'],
+        'technical_readiness_score' => $technicalScore,
+        'leadership_readiness_score' => $leadershipScore,
+        'cultural_fit_score' => $culturalScore,
+        'overall_readiness_score' => $overallScore,
+        'strengths' => $_POST['strengths'] ?? null,
+        'development_areas' => $_POST['development_areas'] ?? null,
+        'recommendations' => $_POST['recommendations'] ?? null,
+        'assessment_date' => $_POST['assessment_date']
+    ];
+
+    if ($candidateId && $successionManager->addAssessment($assessmentData)) {
+        $auth->logActivity('add_succession_assessment', 'succession_assessments', null, null, $assessmentData);
+        header('Location: ?page=candidate_details&id=' . $candidateId . '&success=assessment_added');
+        exit;
+    }
+    header('Location: ?page=candidate_details&id=' . $candidateId . '&error=assessment_add_failed');
+    exit;
 }
 
 // Handle evaluation form submissions BEFORE any HTML output
@@ -791,9 +927,28 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
     <link rel="stylesheet" href="assets/vendor/css/quill.snow.css">
     <!-- Date Range Picker CSS -->
     <link rel="stylesheet" href="assets/vendor/css/daterangepicker.css">
+    <script>
+    (function() {
+        var mode = localStorage.getItem('mode');
+        if (mode === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
     <!-- App CSS -->
     <link rel="stylesheet" href="assets/vendor/css/app-light.css" id="lightTheme">
     <link rel="stylesheet" href="assets/vendor/css/app-dark.css" id="darkTheme" disabled>
+    <script>
+    (function() {
+        var mode = localStorage.getItem('mode');
+        var light = document.getElementById('lightTheme');
+        var dark = document.getElementById('darkTheme');
+        if (mode === 'dark') {
+            if (dark) { dark.disabled = false; }
+            if (light) { light.disabled = true; }
+        }
+    })();
+    </script>
     <!-- HR2 Custom CSS -->
     <link rel="stylesheet" href="assets/css/hr-main.css">
 </head>
@@ -833,6 +988,18 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
                         break;
                     case 'succession_planning':
                         include 'pages/succession_planning.php';
+                        break;
+                    case 'succession_plans':
+                        include 'pages/succession_plans.php';
+                        break;
+                    case 'succession_pipeline':
+                        include 'pages/succession_pipeline.php';
+                        break;
+                    case 'candidate_details':
+                        include 'pages/candidate_details.php';
+                        break;
+                    case 'succession_reports':
+                        include 'pages/succession_reports.php';
                         break;
                     case 'competency':
                         include 'pages/competency.php';
@@ -1008,6 +1175,21 @@ if ($page === 'evaluations' && $_POST && isset($_POST['assign_evaluation'])) {
     <script src="assets/vendor/js/popper.min.js"></script>
     <script src="assets/vendor/js/bootstrap.min.js"></script>
     <script src="assets/vendor/js/simplebar.min.js"></script>
+    <script>
+    if (typeof window.tinycolor === 'undefined') {
+        window.tinycolor = function(color) {
+            return {
+                _color: color,
+                lighten: function() { return this; },
+                darken: function() { return this; },
+                toString: function() { return this._color; }
+            };
+        };
+    }
+    if (typeof window.jQuery !== 'undefined' && typeof jQuery.fn.stickOnScroll !== 'function') {
+        jQuery.fn.stickOnScroll = function() { return this; };
+    }
+    </script>
     <script src="assets/vendor/js/config.js"></script>
     <script src="assets/vendor/js/apps.js"></script>
     <!-- HR2 Custom JavaScript -->

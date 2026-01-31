@@ -32,7 +32,9 @@ $trends = $competencyManager->getEmployeeCompetencyTrends($current_user['id']);
                     <h5 class="card-title mb-0">Performance Trends</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="trendsChart" height="100"></canvas>
+                    <div style="height:260px;">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -195,8 +197,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('trendsChart').getContext('2d');
     const trendsData = <?php echo json_encode($trends); ?>;
     
-    const labels = trendsData.map(trend => trend.cycle_name);
-    const scores = trendsData.map(trend => parseFloat(trend.overall_score));
+    const filtered = trendsData
+        .map(trend => ({
+            label: trend.cycle_name,
+            score: parseFloat(trend.overall_score)
+        }))
+        .filter(item => !isNaN(item.score));
+
+    const labels = filtered.map(item => item.label);
+    const scores = filtered.map(item => item.score);
+
+    if (!labels.length) {
+        const chartContainer = document.getElementById('trendsChart').parentElement;
+        chartContainer.innerHTML = '<div class="text-center text-muted py-4">No trend data available.</div>';
+        return;
+    }
     
     new Chart(ctx, {
         type: 'line',
@@ -216,13 +231,18 @@ document.addEventListener('DOMContentLoaded', function() {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 5,
+                yAxes: [{
                     ticks: {
+                        beginAtZero: true,
+                        max: 5,
                         stepSize: 0.5
                     }
-                }
+                }],
+                xAxes: [{
+                    gridLines: {
+                        display: false
+                    }
+                }]
             },
             plugins: {
                 legend: {

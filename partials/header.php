@@ -52,21 +52,15 @@
 <script>
 // Custom dropdown handling without Bootstrap conflicts
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing dropdowns...');
     
     // Handle profile dropdown
     const profileDropdown = document.getElementById('profileDropdown');
     const profileMenu = document.getElementById('profileDropdownMenu');
     
-    console.log('Profile dropdown element:', profileDropdown);
-    console.log('Profile menu element:', profileMenu);
-    
     if (profileDropdown && profileMenu) {
-        console.log('Adding profile dropdown event listener');
         profileDropdown.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Profile dropdown clicked');
             
             // Close notification dropdown
             const notificationMenu = document.getElementById('notificationDropdownMenu');
@@ -80,17 +74,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isOpen) {
                 profileMenu.classList.remove('show');
                 profileDropdown.setAttribute('aria-expanded', 'false');
-                console.log('Profile dropdown closed');
             } else {
                 profileMenu.classList.add('show');
                 profileDropdown.setAttribute('aria-expanded', 'true');
-                console.log('Profile dropdown opened');
             }
         });
-    } else {
-        console.error('Profile dropdown elements not found!');
-        console.error('profileDropdown:', profileDropdown);
-        console.error('profileMenu:', profileMenu);
     }
     
     // Handle notification dropdown
@@ -101,7 +89,6 @@ document.addEventListener('DOMContentLoaded', function() {
         notificationDropdown.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Notification dropdown clicked');
             
             // Close profile dropdown
             if (profileMenu) {
@@ -114,11 +101,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isOpen) {
                 notificationMenu.classList.remove('show');
                 notificationDropdown.setAttribute('aria-expanded', 'false');
-                console.log('Notification dropdown closed');
             } else {
                 notificationMenu.classList.add('show');
                 notificationDropdown.setAttribute('aria-expanded', 'true');
-                console.log('Notification dropdown opened');
             }
         });
     }
@@ -140,29 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 notificationMenu.classList.remove('show');
                 notificationDropdown.setAttribute('aria-expanded', 'false');
             }
-            console.log('Dropdowns closed by outside click');
         }
     });
-    
-    console.log('Dropdown initialization complete');
-    
-    // Test profile dropdown with a simple approach
-    setTimeout(function() {
-        const testProfileDropdown = document.getElementById('profileDropdown');
-        if (testProfileDropdown) {
-            console.log('Profile dropdown found, adding test click handler');
-            testProfileDropdown.onclick = function(e) {
-                e.preventDefault();
-                console.log('Profile dropdown clicked via test handler');
-                const menu = document.getElementById('profileDropdownMenu');
-                if (menu) {
-                    menu.classList.toggle('show');
-                    console.log('Profile menu toggled');
-                }
-            };
-        } else {
-            console.error('Profile dropdown still not found after timeout');
-        }
-    }, 1000);
 });
 </script>

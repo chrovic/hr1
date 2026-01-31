@@ -1,4 +1,4 @@
-cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" data-simplebar>
+<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" data-simplebar>
     <a href="#" class="btn collapseSidebar toggle-btn d-lg-none text-muted ml-2 mt-3" data-toggle="toggle">
         <i class="fe fe-x"><span class="sr-only"></span></i>
     </a>
@@ -153,8 +153,8 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                     <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'training_management') ? 'active' : ''; ?>" href="?page=training_management">
                             <span class="ml-1 item-text">Training Sessions</span>
-                </a>
-            </li>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'training_requests') ? 'active' : ''; ?>" href="?page=training_requests">
                             <span class="ml-1 item-text">Training Requests</span>
@@ -165,7 +165,7 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                             <span class="ml-1 item-text">Learning Material Requests</span>
                         </a>
                     </li>
-            <li class="nav-item">
+                    <li class="nav-item">
                         <a class="nav-link pl-3 <?php echo ($page == 'training_feedback_management') ? 'active' : ''; ?>" href="?page=training_feedback_management">
                             <span class="ml-1 item-text">Training Feedback</span>
                         </a>
@@ -283,12 +283,24 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                     <span class="ml-3 item-text">Succession Planning</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="?page=succession_plans" class="nav-link <?php echo ($page == 'succession_plans') ? 'active' : ''; ?>">
+                    <i class="fe fe-clipboard fe-16"></i>
+                    <span class="ml-3 item-text">Succession Plans</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="?page=succession_reports" class="nav-link <?php echo ($page == 'succession_reports') ? 'active' : ''; ?>">
+                    <i class="fe fe-bar-chart-2 fe-16"></i>
+                    <span class="ml-3 item-text">Succession Reports</span>
+                </a>
+            </li>
 
             <?php else: ?>
             
             <!-- HR Management -->
             <li class="nav-item dropdown">
-                <a href="#competency" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link" onmouseenter="showDropdown(this)" onmouseleave="hideDropdown(this)">
+                <a href="#competency" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link">
                     <i class="fe fe-target fe-16"></i>
                     <span class="ml-3 item-text">Competency Management</span>
                 </a>
@@ -322,7 +334,7 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
             </li>
 
             <li class="nav-item dropdown">
-                <a href="#learning" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link" onmouseenter="showDropdown(this)" onmouseleave="hideDropdown(this)">
+                <a href="#learning" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link">
                     <i class="fe fe-book-open fe-16"></i>
                     <span class="ml-3 item-text">Learning & Development</span>
                 </a>
@@ -368,7 +380,7 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
             <?php if ($current_user['role'] === 'admin'): ?>
             <!-- System Administration -->
             <li class="nav-item dropdown">
-                <a href="#admin" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link" onmouseenter="showDropdown(this)" onmouseleave="hideDropdown(this)">
+                <a href="#admin" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle nav-link">
                     <i class="fe fe-settings fe-16"></i>
                     <span class="ml-3 item-text">System Administration</span>
                 </a>
@@ -384,8 +396,8 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link pl-3" href="?page=admin_training_management">
-                            <span class="ml-1 item-text">Training Management</span>
+                        <a class="nav-link pl-3" href="?page=system_logs">
+                            <span class="ml-1 item-text">System Logs</span>
                         </a>
                     </li>
                 </ul>
@@ -394,86 +406,3 @@ cond<aside class="sidebar-left border-right bg-white shadow" id="leftSidebar" da
         </ul>
     </nav>
 </aside>
-
-<script>
-let hoverTimeout;
-
-function showDropdown(element) {
-    // Clear any existing timeout
-    if (hoverTimeout) {
-        clearTimeout(hoverTimeout);
-        hoverTimeout = null;
-    }
-    
-    console.log('Hovering over dropdown:', element);
-    
-    const targetId = element.getAttribute('href');
-    const target = document.querySelector(targetId);
-    
-    console.log('Target element:', target);
-    
-    if (target) {
-        // Show the dropdown
-        target.classList.add('show');
-        
-        // Update aria-expanded
-        element.setAttribute('aria-expanded', 'true');
-        
-        // Add active class to parent
-        const parentItem = element.closest('.nav-item');
-        if (parentItem) {
-            parentItem.classList.add('active');
-        }
-        
-        console.log('Dropdown shown');
-    } else {
-        console.error('Target element not found for:', targetId);
-    }
-}
-
-function hideDropdown(element) {
-    // Add a small delay before hiding to prevent flickering
-    hoverTimeout = setTimeout(() => {
-        console.log('Hiding dropdown:', element);
-        
-        const targetId = element.getAttribute('href');
-        const target = document.querySelector(targetId);
-        
-        if (target) {
-            // Hide the dropdown
-            target.classList.remove('show');
-            
-            // Update aria-expanded
-            element.setAttribute('aria-expanded', 'false');
-            
-            // Remove active class from parent
-            const parentItem = element.closest('.nav-item');
-            if (parentItem) {
-                parentItem.classList.remove('active');
-            }
-            
-            console.log('Dropdown hidden');
-        }
-    }, 150); // 150ms delay
-}
-
-// Also handle hover on the dropdown content to keep it open
-document.addEventListener('DOMContentLoaded', function() {
-    const dropdowns = document.querySelectorAll('.collapse');
-    dropdowns.forEach(dropdown => {
-        dropdown.addEventListener('mouseenter', function() {
-            if (hoverTimeout) {
-                clearTimeout(hoverTimeout);
-                hoverTimeout = null;
-            }
-        });
-        
-        dropdown.addEventListener('mouseleave', function() {
-            const parentLink = document.querySelector(`[href="#${this.id}"]`);
-            if (parentLink) {
-                hideDropdown(parentLink);
-            }
-        });
-    });
-});
-</script>

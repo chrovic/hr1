@@ -10,6 +10,10 @@ class SimpleAuth {
     // User login with role-based authentication
     public function login($username, $password, $remember_me = false) {
         try {
+            if (!$this->db) {
+                error_log("Login error: Database connection not available.");
+                return false;
+            }
             $stmt = $this->db->prepare("SELECT * FROM users WHERE username = ? AND status = 'active'");
             $stmt->execute([$username]);
             $user = $stmt->fetch();
@@ -58,6 +62,10 @@ class SimpleAuth {
         }
         
         try {
+            if (!$this->db) {
+                error_log("Get current user error: Database connection not available.");
+                return null;
+            }
             $stmt = $this->db->prepare("SELECT * FROM users WHERE id = ?");
             $stmt->execute([$_SESSION['user_id']]);
             return $stmt->fetch();

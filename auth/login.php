@@ -6,6 +6,9 @@ require_once '../includes/functions/simple_auth.php';
 $auth = new SimpleAuth();
 $error = '';
 $success = '';
+if (!getDB()) {
+    $error = 'Database connection failed. Please check your database configuration.';
+}
 
 // Redirect if already logged in
 if ($auth->isLoggedIn()) {
@@ -13,7 +16,7 @@ if ($auth->isLoggedIn()) {
     exit;
 }
 
-if ($_POST) {
+if ($_POST && !$error) {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';

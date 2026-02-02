@@ -2,6 +2,7 @@
 // Simplified Authentication and User Management System
 class SimpleAuth {
     private $db;
+    private $idleTimeoutSeconds = 300;
     
     public function __construct() {
         $this->db = getDB();
@@ -19,10 +20,7 @@ class SimpleAuth {
             $user = $stmt->fetch();
             
             if ($user && password_verify($password, $user['password_hash'])) {
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['role'] = $user['role'];
-                $_SESSION['logged_in'] = true;
+                $this->startSessionForUser($user);
                 
                 // Handle remember me functionality
                 if ($remember_me) {
@@ -49,10 +47,69 @@ class SimpleAuth {
             return false;
         }
     }
+
+    // Verify credentials without creating a session
+    public function authenticateUser($username, $password) {
+        try {
+            if (!$this->db) {
+                return null;
+            }
+            $stmt = $this->db->prepare("SELECT * FROM users WHERE (username = ? OR email = ?) AND status = 'active'");
+            $stmt->execute([$username, $username]);
+            $user = $stmt->fetch();
+            if ($user && password_verify($password, $user['password_hash'])) {
+                return $user;
+            }
+            return null;
+        } catch (PDOException $e) {
+            error_log("Authenticate error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    // Start a session for a given user
+    public function startSessionForUser($user) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['logged_in'] = true;
+        $_SESSION['last_activity'] = time();
+    }
+
+    // Start a session for a user id
+    public function loginWithUserId($userId) {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM users WHERE id = ? AND status = 'active'");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch();
+            if ($user) {
+                $this->startSessionForUser($user);
+                $this->logActivity('login', 'users', $user['id'], null, null);
+                return true;
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("Login by ID error: " . $e->getMessage());
+            return false;
+        }
+    }
     
     // Check if user is logged in
     public function isLoggedIn() {
-        return isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
+        if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+            return false;
+        }
+
+        $now = time();
+        $lastActivity = $_SESSION['last_activity'] ?? null;
+
+        if ($lastActivity !== null && ($now - $lastActivity) > $this->idleTimeoutSeconds) {
+            $this->expireIdleSession();
+            return false;
+        }
+
+        $_SESSION['last_activity'] = $now;
+        return true;
     }
     
     // Get current user data
@@ -255,6 +312,32 @@ class SimpleAuth {
         
         session_destroy();
         session_start();
+    }
+
+    private function expireIdleSession() {
+        $userId = $_SESSION['user_id'] ?? null;
+        if ($userId) {
+            $this->logActivity('session_timeout', 'users', $userId, null, ['timeout_seconds' => $this->idleTimeoutSeconds]);
+        }
+
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params['path'],
+                $params['domain'],
+                $params['secure'],
+                $params['httponly']
+            );
+        }
+        session_destroy();
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            session_start();
+        }
+        $_SESSION['session_timeout'] = true;
     }
     
     // Create new user

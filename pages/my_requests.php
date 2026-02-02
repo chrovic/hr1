@@ -161,13 +161,14 @@ if (isset($_GET['success'])) {
                                         </td>
                                         <td>
                                             <?php
+                                            $priority = $request['priority'] ?? 'medium';
                                             $priorityClass = [
                                                 'low' => 'badge-secondary',
                                                 'medium' => 'badge-warning',
                                                 'high' => 'badge-danger'
-                                            ][$request['priority']] ?? 'badge-secondary';
+                                            ][strtolower($priority)] ?? 'badge-secondary';
                                             ?>
-                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($request['priority'] ?? 'Medium'); ?></span>
+                                            <span class="badge <?php echo $priorityClass; ?>"><?php echo ucfirst($priority); ?></span>
                                         </td>
                                         <td>
                                             <?php

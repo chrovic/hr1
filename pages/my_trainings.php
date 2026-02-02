@@ -239,11 +239,23 @@ if (isset($_GET['success'])) {
                                         </td>
                                         <td>
                                             <div class="btn-group" role="group">
-                                                <button type="button" class="btn btn-sm btn-outline-info" onclick="viewTrainingDetails(<?php echo $enrollment['id']; ?>)">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        onclick="viewTrainingDetails(this)"
+                                                        data-enrollment-id="<?php echo (int)$enrollment['id']; ?>"
+                                                        data-training-title="<?php echo htmlspecialchars($enrollment['training_title'] ?? 'Untitled Training'); ?>"
+                                                        data-category="<?php echo htmlspecialchars($enrollment['category'] ?? 'N/A'); ?>"
+                                                        data-session-name="<?php echo htmlspecialchars($enrollment['session_name'] ?? 'Training Session'); ?>"
+                                                        data-start-date="<?php echo htmlspecialchars($enrollment['start_date'] ?? ''); ?>"
+                                                        data-end-date="<?php echo htmlspecialchars($enrollment['end_date'] ?? ''); ?>"
+                                                        data-location="<?php echo htmlspecialchars($enrollment['location'] ?? 'TBD'); ?>"
+                                                        data-status="<?php echo htmlspecialchars($displayStatus ?? ''); ?>"
+                                                        data-score="<?php echo htmlspecialchars($enrollment['score'] ?? ''); ?>"
+                                                        data-trainer="<?php echo htmlspecialchars(trim(($enrollment['trainer_first_name'] ?? '') . ' ' . ($enrollment['trainer_last_name'] ?? ''))); ?>">
                                                     <i class="fe fe-eye fe-12"></i>
                                                 </button>
                                                 <?php if ($enrollment['status'] === 'enrolled'): ?>
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="cancelEnrollment(<?php echo $enrollment['id']; ?>)">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="cancelEnrollment(<?php echo (int)$enrollment['id']; ?>)">
                                                         <i class="fe fe-x fe-12"></i>
                                                     </button>
                                                 <?php endif; ?>
@@ -255,6 +267,63 @@ if (isset($_GET['success'])) {
                         </table>
                     </div>
                 <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Training Details Modal -->
+<div class="modal fade" id="trainingDetailsModal" tabindex="-1" role="dialog" aria-labelledby="trainingDetailsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="trainingDetailsLabel">Training Details</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Training</div>
+                        <div id="detailTrainingTitle"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Category</div>
+                        <div id="detailCategory"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Session</div>
+                        <div id="detailSessionName"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Trainer</div>
+                        <div id="detailTrainer"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Schedule</div>
+                        <div id="detailSchedule"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Location</div>
+                        <div id="detailLocation"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Status</div>
+                        <div id="detailStatus"></div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="text-muted small">Score</div>
+                        <div id="detailScore"></div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-muted small">Enrollment ID</div>
+                        <div id="detailEnrollmentId"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -310,8 +379,31 @@ if (isset($_GET['success'])) {
 </div>
 
 <script>
-function viewTrainingDetails(enrollmentId) {
-    alert('Training details functionality will be implemented soon. Enrollment ID: ' + enrollmentId);
+function viewTrainingDetails(button) {
+    if (!button) {
+        return;
+    }
+    const data = button.dataset;
+    const startDate = data.startDate ? new Date(data.startDate) : null;
+    const endDate = data.endDate ? new Date(data.endDate) : null;
+    let scheduleText = 'TBD';
+    if (startDate) {
+        const start = startDate.toLocaleString();
+        const end = endDate ? endDate.toLocaleString() : '';
+        scheduleText = end ? start + ' - ' + end : start;
+    }
+
+    document.getElementById('detailTrainingTitle').textContent = data.trainingTitle || 'Untitled Training';
+    document.getElementById('detailCategory').textContent = data.category || 'N/A';
+    document.getElementById('detailSessionName').textContent = data.sessionName || 'Training Session';
+    document.getElementById('detailTrainer').textContent = data.trainer || 'TBD';
+    document.getElementById('detailSchedule').textContent = scheduleText;
+    document.getElementById('detailLocation').textContent = data.location || 'TBD';
+    document.getElementById('detailStatus').textContent = data.status ? data.status.replace('_', ' ') : 'Unknown';
+    document.getElementById('detailScore').textContent = data.score ? data.score + '%' : 'N/A';
+    document.getElementById('detailEnrollmentId').textContent = data.enrollmentId || 'N/A';
+
+    $('#trainingDetailsModal').modal('show');
 }
 
 function cancelEnrollment(enrollmentId) {
@@ -322,18 +414,20 @@ function cancelEnrollment(enrollmentId) {
 }
 
 // Show training details when session is selected
-document.getElementById('session_id').addEventListener('change', function() {
-    const sessionId = this.value;
-    const detailsDiv = document.getElementById('trainingDetails');
-    
-    if (sessionId) {
-        // You can implement AJAX call here to fetch training details
-        detailsDiv.style.display = 'block';
-        detailsDiv.innerHTML = '<div class="alert alert-info">Training details will be loaded here.</div>';
-    } else {
-        detailsDiv.style.display = 'none';
-    }
-});
+const sessionSelect = document.getElementById('session_id');
+if (sessionSelect) {
+    sessionSelect.addEventListener('change', function() {
+        const sessionId = this.value;
+        const detailsDiv = document.getElementById('trainingDetails');
+        
+        if (sessionId) {
+            detailsDiv.style.display = 'block';
+            detailsDiv.innerHTML = '<div class="alert alert-info">Training details will be loaded here.</div>';
+        } else {
+            detailsDiv.style.display = 'none';
+        }
+    });
+}
 </script>
 
 

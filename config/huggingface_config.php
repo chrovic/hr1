@@ -3,14 +3,18 @@
 // This file contains configuration settings for Hugging Face AI integration
 
 // Hugging Face API Configuration
-define('HUGGINGFACE_API_KEY', getenv('HUGGINGFACE_API_KEY') ?: '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');
-define('HUGGINGFACE_BASE_URL', 'https://api-inference.huggingface.co/models/');
+define('HUGGINGFACE_API_KEY', getenv('HUGGINGFACE_API_KEY') ?: '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');
+define('HUGGINGFACE_BASE_URL', 'https://router.huggingface.co/hf-inference/models/');
 
 // Model Configuration - Updated to more accurate models
 define('SENTIMENT_MODEL', 'cardiffnlp/twitter-roberta-base-sentiment-latest');
 define('SUMMARIZATION_MODEL', 'facebook/bart-large-cnn');
 define('EMOTION_MODEL', 'j-hartmann/emotion-english-distilroberta-base');
 define('CLASSIFICATION_MODEL', 'microsoft/DialoGPT-medium');
+define('ZERO_SHOT_MODEL', 'facebook/bart-large-mnli');
+define('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2');
+define('QA_MODEL', 'deepset/roberta-base-squad2');
+define('CHAT_MODEL', 'TinyLlama/TinyLlama-1.1B-Chat-v1.0');
 
 // Analysis Settings
 define('AI_ANALYSIS_ENABLED', true);

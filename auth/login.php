@@ -2,12 +2,25 @@
 session_start();
 require_once '../includes/data/db.php';
 require_once '../includes/functions/simple_auth.php';
+require_once '../includes/functions/otp.php';
+require_once '../config/recaptcha.php';
 
 $auth = new SimpleAuth();
+$otpManager = new OTPManager();
 $error = '';
 $success = '';
+$isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'], true);
+$forceRecaptcha = defined('FORCE_RECAPTCHA') && FORCE_RECAPTCHA === true;
+$recaptchaEnabled = $forceRecaptcha ? true : !$isLocal;
 if (!getDB()) {
     $error = 'Database connection failed. Please check your database configuration.';
+}
+if (!empty($_SESSION['session_timeout'])) {
+    $success = 'Your session expired due to inactivity. Please sign in again.';
+    unset($_SESSION['session_timeout']);
+}
+if (isset($_GET['reset_otp'])) {
+    unset($_SESSION['otp_user_id']);
 }
 
 // Redirect if already logged in
@@ -17,50 +30,100 @@ if ($auth->isLoggedIn()) {
 }
 
 if ($_POST && !$error) {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
-    
-    if (empty($username) || empty($password)) {
-        $error = 'Please enter both username and password.';
-    } elseif (empty($recaptchaResponse)) {
+    $otpStep = isset($_POST['otp_step']) && $_POST['otp_step'] === '1';
+    $resendOtp = isset($_POST['resend_otp']) && $_POST['resend_otp'] === '1';
+
+    if ($otpStep) {
+        $otpCode = trim($_POST['otp_code'] ?? '');
+        $otpUserId = $_SESSION['otp_user_id'] ?? null;
+
+        if (!$otpUserId) {
+            $error = 'OTP session expired. Please login again.';
+        } elseif ($resendOtp) {
+            $stmt = getDB()->prepare("SELECT email FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$otpUserId]);
+            $row = $stmt->fetch();
+            if (!$row || empty($row['email'])) {
+                $error = 'No email is set for this account. Please contact administrator.';
+            } else {
+                $sent = $otpManager->generateOtp($otpUserId, $row['email']);
+                if (!empty($sent['success'])) {
+                    $success = 'A new OTP has been sent to your email.';
+                } else {
+                    $error = $sent['message'] ?? 'Unable to send OTP.';
+                }
+            }
+        } elseif ($otpCode === '') {
+            $error = 'Please enter the OTP code.';
+        } else {
+            $result = $otpManager->verifyOtp($otpUserId, $otpCode);
+            if (!empty($result['success'])) {
+                unset($_SESSION['otp_user_id']);
+                if ($auth->loginWithUserId($otpUserId)) {
+                    header('Location: ../index.php');
+                    exit;
+                }
+                $error = 'Login failed. Please try again.';
+            } else {
+                $error = $result['message'] ?? 'Invalid OTP.';
+            }
+        }
+    } else {
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $recaptchaResponse = $_POST['g-recaptcha-response'] ?? '';
+        
+        if (empty($username) || empty($password)) {
+            $error = 'Please enter both username and password.';
+    } elseif (empty($recaptchaResponse) && $recaptchaEnabled) {
         $error = 'Please complete the reCAPTCHA verification.';
     } else {
-        $secretKey = '6LeZV1wsAAAAAK07SuJYRE7NtyrAVt0uJ5cWndhG';
-        $verifyResponse = null;
-        try {
-            $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
-            $postData = http_build_query([
-                'secret' => $secretKey,
-                'response' => $recaptchaResponse,
-                'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
-            ]);
-            $context = stream_context_create([
-                'http' => [
-                    'method' => 'POST',
-                    'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
-                    'content' => $postData,
-                    'timeout' => 10
-                ]
-            ]);
-            $verifyRaw = file_get_contents($verifyUrl, false, $context);
-            $verifyResponse = $verifyRaw ? json_decode($verifyRaw, true) : null;
-        } catch (Exception $e) {
-            $verifyResponse = null;
+        $verifyOk = !$recaptchaEnabled;
+        if ($recaptchaEnabled) {
+            $secretKey = '6LeZV1wsAAAAAK07SuJYRE7NtyrAVt0uJ5cWndhG';
+                $verifyResponse = null;
+                try {
+                    $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+                    $postData = http_build_query([
+                        'secret' => $secretKey,
+                        'response' => $recaptchaResponse,
+                        'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
+                    ]);
+                    $context = stream_context_create([
+                        'http' => [
+                            'method' => 'POST',
+                            'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+                            'content' => $postData,
+                            'timeout' => 10
+                        ]
+                    ]);
+                    $verifyRaw = file_get_contents($verifyUrl, false, $context);
+                    $verifyResponse = $verifyRaw ? json_decode($verifyRaw, true) : null;
+                } catch (Exception $e) {
+                    $verifyResponse = null;
+                }
+            $verifyOk = !empty($verifyResponse['success']);
         }
 
-        if (!$verifyResponse || empty($verifyResponse['success'])) {
-            $error = 'reCAPTCHA verification failed. Please try again.';
-        } else {
-            $result = $auth->login($username, $password, false);
-            
-            if ($result === true) {
-                // Login successful
-                header('Location: ../index.php');
-                exit;
+            if (!$verifyOk) {
+                $error = 'reCAPTCHA verification failed. Please try again.';
             } else {
-                // Login failed
-                $error = 'Invalid username or password. Please try again.';
+                $user = $auth->authenticateUser($username, $password);
+                if ($user) {
+                    if (empty($user['email'])) {
+                        $error = 'No email is set for this account. Please contact administrator.';
+                    } else {
+                        $_SESSION['otp_user_id'] = $user['id'];
+                        $sent = $otpManager->generateOtp($user['id'], $user['email']);
+                        if (!empty($sent['success'])) {
+                            $success = 'OTP sent to your email. Please enter the code below.';
+                        } else {
+                            $error = $sent['message'] ?? 'Unable to send OTP. Please check email settings.';
+                        }
+                    }
+                } else {
+                    $error = 'Invalid username or password. Please try again.';
+                }
             }
         }
     }
@@ -80,7 +143,9 @@ if ($_POST && !$error) {
     <link rel="stylesheet" href="../assets/vendor/css/simplebar.css">
     <link rel="stylesheet" href="../assets/vendor/css/feather.css">
     <link rel="stylesheet" href="../assets/vendor/css/app-light.css">
+    <?php if ($recaptchaEnabled): ?>
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <?php endif; ?>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="../assets/css/hr-main.css">
@@ -433,25 +498,46 @@ if ($_POST && !$error) {
             <?php endif; ?>
 
             <form method="POST" id="loginForm">
-                <div class="form-group">
-                    <label for="username" class="form-label">Username or Email</label>
-                    <input type="text" class="form-control" id="username" name="username" 
-                           placeholder="Enter your username or email" required autocomplete="username">
-                </div>
+                <?php $otpPending = isset($_SESSION['otp_user_id']); ?>
+                <?php if ($otpPending): ?>
+                    <div class="form-group">
+                        <label for="otp_code" class="form-label">Enter OTP</label>
+                        <input type="text" class="form-control" id="otp_code" name="otp_code"
+                               placeholder="6-digit code" required autocomplete="one-time-code">
+                    </div>
+                    <input type="hidden" name="otp_step" value="1">
+                    <input type="hidden" name="resend_otp" id="resend_otp" value="0">
+                <?php else: ?>
+                    <div class="form-group">
+                        <label for="username" class="form-label">Username or Email</label>
+                        <input type="text" class="form-control" id="username" name="username" 
+                               placeholder="Enter your username or email" required autocomplete="username">
+                    </div>
 
-                <div class="form-group">
-                    <label for="password" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="password" name="password" 
-                           placeholder="Enter your password" required autocomplete="current-password">
-                </div>
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               placeholder="Enter your password" required autocomplete="current-password">
+                    </div>
 
-                <div class="form-group" style="display:flex; justify-content:center;">
-                    <div class="g-recaptcha" data-sitekey="6LeZV1wsAAAAAJYIiez6oL4YuH1y9K6S_XAUJrFI"></div>
-                </div>
+                    <?php if ($recaptchaEnabled): ?>
+                    <div class="form-group" style="display:flex; justify-content:center;">
+                        <div class="g-recaptcha" data-sitekey="6LeZV1wsAAAAAJYIiez6oL4YuH1y9K6S_XAUJrFI"></div>
+                    </div>
+                    <?php endif; ?>
+                <?php endif; ?>
 
                 <button type="submit" class="btn btn-login" id="loginBtn">
-                    <span class="btn-text">Sign In</span>
+                    <span class="btn-text"><?php echo $otpPending ? 'Verify OTP' : 'Sign In'; ?></span>
                 </button>
+                <?php if ($otpPending): ?>
+                    <button type="button" class="btn btn-link mt-2" id="resendBtn" style="width: 100%; text-align:center;">
+                        Resend OTP
+                    </button>
+                    <a href="login.php?reset_otp=1" class="btn btn-link mt-1" style="width: 100%; text-align:center;">
+                        Back to Login
+                    </a>
+                <?php endif; ?>
             </form>
 
         </div>
@@ -692,12 +778,30 @@ if ($_POST && !$error) {
             const form = document.getElementById('loginForm');
             const loginBtn = document.getElementById('loginBtn');
             const btnText = loginBtn.querySelector('.btn-text');
+            const resendBtn = document.getElementById('resendBtn');
+            const resendField = document.getElementById('resend_otp');
+
+            const otpField = document.getElementById('otp_code');
+            if (resendBtn && resendField) {
+                resendBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    resendField.value = '1';
+                    if (otpField) {
+                        otpField.required = false;
+                    }
+                    form.submit();
+                });
+            }
             
             // Form submission with loading state
             form.addEventListener('submit', function(e) {
                 loginBtn.disabled = true;
                 loginBtn.classList.add('loading');
-                btnText.textContent = 'Signing In...';
+                if (resendField && resendField.value === '1') {
+                    btnText.textContent = 'Sending OTP...';
+                } else {
+                    btnText.textContent = 'Signing In...';
+                }
             });
             
             // Enhanced form interactions
@@ -766,7 +870,10 @@ if ($_POST && !$error) {
             document.head.appendChild(style);
             
             // Auto-focus on username field
-            document.getElementById('username').focus();
+            const usernameField = document.getElementById('username');
+            if (usernameField) {
+                usernameField.focus();
+            }
         });
     </script>
 </body>

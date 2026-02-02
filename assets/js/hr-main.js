@@ -92,12 +92,18 @@ class HRSystem {
     setupFormValidation() {
         const forms = document.querySelectorAll('form');
         forms.forEach(form => {
+            if (form.hasAttribute('data-skip-validation')) {
+                return;
+            }
             form.addEventListener('submit', this.validateForm.bind(this));
         });
     }
 
     validateForm(event) {
         const form = event.target;
+        if (form && form.hasAttribute('data-skip-validation')) {
+            return;
+        }
         const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
         let isValid = true;
 

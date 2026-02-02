@@ -864,6 +864,16 @@ if ($page === 'evaluation_form' && $_POST && isset($_POST['submit_scores'])) {
     
     if ($competencyManager->submitScores($evaluation_id, $scores)) {
         $auth->logActivity('complete_evaluation', 'evaluations', $evaluation_id, null, ['scores_count' => count($scores)]);
+        // Auto-run AI analysis for this evaluation (no manual trigger required)
+        if (defined('AI_ANALYSIS_ENABLED') && AI_ANALYSIS_ENABLED) {
+            require_once 'includes/functions/huggingface_ai.php';
+            try {
+                $aiManager = new HuggingFaceAI();
+                $aiManager->analyzeCompetencyFeedback($evaluation_id);
+            } catch (Exception $e) {
+                error_log('Auto AI analysis failed: ' . $e->getMessage());
+            }
+        }
         header('Location: ?page=evaluation_form&id=' . $evaluation_id . '&success=scores_submitted');
         exit;
     }

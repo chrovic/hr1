@@ -3,6 +3,7 @@ require_once 'includes/data/db.php';
 require_once 'includes/functions/simple_auth.php';
 require_once 'includes/functions/learning.php';
 require_once 'includes/functions/redirect_helper.php';
+require_once 'includes/functions/learning_materials.php';
 
 $auth = new SimpleAuth();
 
@@ -20,6 +21,7 @@ if ($current_user['role'] !== 'admin' && $current_user['role'] !== 'hr_manager')
     exit;
 }
 $learningManager = new LearningManager();
+$learningMaterials = new LearningMaterials();
 
 $message = '';
 $error = '';
@@ -46,6 +48,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ");
                 $stmt->execute([$current_user['id'], $request_id]);
                 
+                // Save material link/file if provided
+                $materialType = $_POST['material_type'] ?? 'file';
+                $materialLink = trim($_POST['material_link'] ?? '');
+                $materialNotes = trim($_POST['material_notes'] ?? '');
+                $filePath = null;
+
+                if (!empty($_FILES['material_file']['name'])) {
+                    $uploadDir = __DIR__ . '/../uploads/learning_materials';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0777, true);
+                    }
+                    $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES['material_file']['name']));
+                    $destName = time() . '_' . $safeName;
+                    $destPath = $uploadDir . '/' . $destName;
+                    if (move_uploaded_file($_FILES['material_file']['tmp_name'], $destPath)) {
+                        $filePath = 'uploads/learning_materials/' . $destName;
+                        $materialType = 'file';
+                    }
+                }
+
+                if ($materialType === 'link' && $materialLink !== '') {
+                    $filePath = null;
+                }
+
+                $learningMaterials->upsertMaterial($request_id, [
+                    'material_type' => $materialType,
+                    'file_path' => $filePath,
+                    'link_url' => $materialLink !== '' ? $materialLink : null,
+                    'notes' => $materialNotes !== '' ? $materialNotes : null
+                ]);
+
                 $message = 'Learning material request approved successfully!';
                 
             } elseif ($action === 'reject') {
@@ -295,7 +328,7 @@ try {
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form method="POST" action="">
+            <form method="POST" action="" enctype="multipart/form-data">
                 <div class="modal-body">
                     <input type="hidden" id="modal_request_id" name="request_id" value="">
                     <input type="hidden" id="modal_action" name="action" value="">
@@ -303,6 +336,29 @@ try {
                     <div class="form-group">
                         <label for="modal_reason">Reason (Optional)</label>
                         <textarea class="form-control" id="modal_reason" name="reason" rows="3" placeholder="Enter reason for approval or rejection..."></textarea>
+                    </div>
+
+                    <div id="material_fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="modal_material_type">Material Type</label>
+                            <select class="form-control" id="modal_material_type" name="material_type">
+                                <option value="file">File Upload</option>
+                                <option value="link">External Link</option>
+                                <option value="text">Notes Only</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modal_material_file">Material File (optional)</label>
+                            <input type="file" class="form-control-file" id="modal_material_file" name="material_file">
+                        </div>
+                        <div class="form-group">
+                            <label for="modal_material_link">Material Link (optional)</label>
+                            <input type="url" class="form-control" id="modal_material_link" name="material_link" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label for="modal_material_notes">Material Notes (optional)</label>
+                            <textarea class="form-control" id="modal_material_notes" name="material_notes" rows="2"></textarea>
+                        </div>
                     </div>
                     
                     <div class="alert alert-info">
@@ -328,15 +384,22 @@ function openApprovalModal(requestId, action) {
     
     const submitBtn = document.getElementById('modal_submit_btn');
     const actionText = document.getElementById('modal_action_text');
+    const materialFields = document.getElementById('material_fields');
     
     if (action === 'approve') {
         submitBtn.className = 'btn btn-success';
         submitBtn.innerHTML = '<i class="fe fe-check mr-2"></i>Approve Request';
         actionText.textContent = 'This will approve the learning material request and grant the employee access to the requested materials.';
+        if (materialFields) {
+            materialFields.style.display = 'block';
+        }
     } else {
         submitBtn.className = 'btn btn-danger';
         submitBtn.innerHTML = '<i class="fe fe-x mr-2"></i>Reject Request';
         actionText.textContent = 'This will reject the learning material request. You can provide a reason for the rejection.';
+        if (materialFields) {
+            materialFields.style.display = 'none';
+        }
     }
     
     $('#approvalModal').modal('show');

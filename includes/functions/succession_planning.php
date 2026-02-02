@@ -243,6 +243,13 @@ class SuccessionPlanning {
             
             if ($result) {
                 $candidateId = $this->db->lastInsertId();
+                // Auto-assign readiness level via AI right after candidate is created
+                $autoReadiness = $this->autoAssignReadinessLevel($candidateId, $candidateData);
+                if ($autoReadiness) {
+                    $this->updateCandidateReadinessLevel($candidateId, $autoReadiness);
+                }
+                // Auto-create an initial AI-assisted assessment record
+                $this->createInitialAssessment($candidateId, $candidateData);
                 
                 // Get employee, role, and assigner names for notification
                 $employeeStmt = $this->db->prepare("SELECT first_name, last_name FROM users WHERE id = ?");
@@ -280,6 +287,54 @@ class SuccessionPlanning {
         } catch (PDOException $e) {
             error_log("Error assigning candidate: " . $e->getMessage());
             return false;
+        }
+    }
+
+    private function createInitialAssessment($candidateId, $candidateData) {
+        $assessmentData = [
+            'candidate_id' => $candidateId,
+            'assessor_id' => $candidateData['assigned_by'],
+            'assessment_type' => 'initial',
+            'technical_readiness_score' => null,
+            'leadership_readiness_score' => null,
+            'cultural_fit_score' => null,
+            'overall_readiness_score' => null,
+            'strengths' => $candidateData['notes'] ?? null,
+            'development_areas' => $candidateData['development_plan'] ?? null,
+            'recommendations' => null,
+            'assessment_date' => date('Y-m-d')
+        ];
+
+        try {
+            $this->addAssessment($assessmentData);
+        } catch (Exception $e) {
+            error_log("Error creating initial assessment: " . $e->getMessage());
+        }
+    }
+
+    private function autoAssignReadinessLevel($candidateId, $candidateData) {
+        require_once 'ai_integration.php';
+        $ai = new AIIntegration();
+        $context = $this->getCandidateAIContext($candidateId);
+        $assessmentData = [
+            'strengths' => $candidateData['notes'] ?? '',
+            'development_areas' => $candidateData['development_plan'] ?? '',
+            'recommendations' => ''
+        ];
+        $aiResult = $ai->evaluateSuccessionReadiness($context, $assessmentData);
+        return $aiResult['readiness_level'] ?? null;
+    }
+
+    private function updateCandidateReadinessLevel($candidateId, $readinessLevel) {
+        try {
+            $stmt = $this->db->prepare("
+                UPDATE succession_candidates
+                SET readiness_level = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([$readinessLevel, $candidateId]);
+        } catch (PDOException $e) {
+            error_log("Error updating candidate readiness: " . $e->getMessage());
         }
     }
     
@@ -748,6 +803,18 @@ class SuccessionPlanning {
             if (!$this->ensureSuccessionAssessmentsTable()) {
                 return false;
             }
+            if (($assessmentData['overall_readiness_score'] ?? null) === null && $this->hasAssessmentText($assessmentData)) {
+                require_once 'ai_integration.php';
+                $ai = new AIIntegration();
+                $context = $this->getCandidateAIContext($assessmentData['candidate_id']);
+                $aiResult = $ai->evaluateSuccessionReadiness($context, $assessmentData);
+                if (!empty($aiResult['overall_score'])) {
+                    $assessmentData['overall_readiness_score'] = (int)$aiResult['overall_score'];
+                }
+                if (empty($assessmentData['recommendations']) && !empty($aiResult['summary'])) {
+                    $assessmentData['recommendations'] = 'AI summary: ' . $aiResult['summary'];
+                }
+            }
             $stmt = $this->db->prepare("
                 INSERT INTO succession_assessments (candidate_id, assessor_id, assessment_type, technical_readiness_score, leadership_readiness_score, cultural_fit_score, overall_readiness_score, strengths, development_areas, recommendations, assessment_date) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -769,6 +836,34 @@ class SuccessionPlanning {
         } catch (PDOException $e) {
             error_log("Error adding assessment: " . $e->getMessage());
             return false;
+        }
+    }
+
+    private function hasAssessmentText($assessmentData) {
+        return !empty($assessmentData['strengths']) ||
+            !empty($assessmentData['development_areas']) ||
+            !empty($assessmentData['recommendations']);
+    }
+
+    private function getCandidateAIContext($candidateId) {
+        $schema = $this->getSuccessionCandidateSchema();
+        $roleCol = $schema['role'];
+        $employeeCol = $schema['employee'];
+
+        try {
+            $stmt = $this->db->prepare("
+                SELECT sc.*, u.first_name, u.last_name, u.position, u.department,
+                       cr.position_title as role_title, cr.description as role_description
+                FROM succession_candidates sc
+                LEFT JOIN users u ON sc.{$employeeCol} = u.id
+                LEFT JOIN critical_positions cr ON sc.{$roleCol} = cr.id
+                WHERE sc.id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$candidateId]);
+            return $stmt->fetch() ?: [];
+        } catch (PDOException $e) {
+            return [];
         }
     }
     

@@ -12,6 +12,26 @@ class HuggingFaceAI {
         $this->baseUrl = HUGGINGFACE_BASE_URL;
         $this->db = getDB();
     }
+
+    /**
+     * Check whether the API key is configured
+     */
+    public function isConfigured() {
+        return !empty($this->apiKey);
+    }
+
+    /**
+     * Run a raw inference request against a Hugging Face model
+     */
+    public function infer($model, $payload) {
+        try {
+            return $this->makeRequest($model, $payload);
+        } catch (Exception $e) {
+            return [
+                'error' => $e->getMessage()
+            ];
+        }
+    }
     
     /**
      * Analyze sentiment of evaluator feedback
@@ -160,6 +180,125 @@ class HuggingFaceAI {
                 'original_length' => strlen($text),
                 'summary_length' => strlen($this->fallbackSummary($text, $maxLength)),
                 'compression_ratio' => strlen($this->fallbackSummary($text, $maxLength)) / strlen($text),
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Answer a question given a context (Q&A model)
+     */
+    public function answerQuestion($question, $context) {
+        $question = trim((string)$question);
+        $context = trim((string)$context);
+
+        if ($question === '' || $context === '') {
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
+                'error' => 'Question or context is empty'
+            ];
+        }
+
+        try {
+            $response = $this->makeRequest(QA_MODEL, [
+                'inputs' => [
+                    'question' => $question,
+                    'context' => $context
+                ]
+            ]);
+
+            if (isset($response['error'])) {
+                return [
+                    'answer' => '',
+                    'confidence' => 0.0,
+                    'error' => $response['error']
+                ];
+            }
+
+            if (isset($response['answer'])) {
+                return [
+                    'answer' => (string)$response['answer'],
+                    'confidence' => (float)($response['score'] ?? 0.5),
+                    'raw_response' => $response
+                ];
+            }
+
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
+                'error' => 'No answer returned by model'
+            ];
+        } catch (Exception $e) {
+            error_log("Hugging Face Q&A error: " . $e->getMessage());
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Generate a conversational response (instruction model)
+     */
+    public function generateChatResponse($prompt, $maxTokens = 240) {
+        $prompt = trim((string)$prompt);
+        if ($prompt === '') {
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
+                'error' => 'Prompt is empty'
+            ];
+        }
+
+        try {
+            $response = $this->makeRequest(CHAT_MODEL, [
+                'inputs' => $prompt,
+                'parameters' => [
+                    'max_new_tokens' => $maxTokens,
+                    'temperature' => 0.8,
+                    'top_p' => 0.9,
+                    'do_sample' => true,
+                    'repetition_penalty' => 1.1,
+                    'return_full_text' => false
+                ]
+            ]);
+
+            if (isset($response['error'])) {
+                return [
+                    'answer' => '',
+                    'confidence' => 0.0,
+                    'error' => $response['error']
+                ];
+            }
+
+            if (isset($response['generated_text'])) {
+                return [
+                    'answer' => (string)$response['generated_text'],
+                    'confidence' => 0.7,
+                    'raw_response' => $response
+                ];
+            }
+
+            if (isset($response[0]['generated_text'])) {
+                return [
+                    'answer' => (string)$response[0]['generated_text'],
+                    'confidence' => 0.7,
+                    'raw_response' => $response
+                ];
+            }
+
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
+                'error' => 'No generated text returned by model'
+            ];
+        } catch (Exception $e) {
+            error_log("Hugging Face chat generation error: " . $e->getMessage());
+            return [
+                'answer' => '',
+                'confidence' => 0.0,
                 'error' => $e->getMessage()
             ];
         }
@@ -506,40 +645,62 @@ class HuggingFaceAI {
         if (!$this->apiKey) {
             throw new Exception('Hugging Face API key not configured');
         }
-        
+
         $url = $this->baseUrl . $model;
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $this->apiKey,
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        if ($error) {
-            throw new Exception('CURL Error: ' . $error);
+        if (!isset($data['options'])) {
+            $data['options'] = ['wait_for_model' => true];
+        } elseif (!isset($data['options']['wait_for_model'])) {
+            $data['options']['wait_for_model'] = true;
         }
-        
-        if ($httpCode !== 200) {
-            throw new Exception('HTTP Error: ' . $httpCode . ' - ' . $response);
+
+        $attempts = 0;
+        $maxAttempts = 3;
+
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . $this->apiKey,
+                'Content-Type: application/json'
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            if ($error) {
+                throw new Exception('CURL Error: ' . $error);
+            }
+
+            if ($httpCode === 503) {
+                $decoded = json_decode($response, true);
+                $wait = isset($decoded['estimated_time']) ? (int)ceil($decoded['estimated_time']) : 2;
+                if ($attempts < $maxAttempts) {
+                    sleep(min(6, max(1, $wait)));
+                    continue;
+                }
+            }
+
+            if ($httpCode !== 200) {
+                throw new Exception('HTTP Error: ' . $httpCode . ' - ' . $response);
+            }
+
+            $decodedResponse = json_decode($response, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Invalid JSON response: ' . $response);
+            }
+
+            return $decodedResponse;
         }
-        
-        $decodedResponse = json_decode($response, true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Invalid JSON response: ' . $response);
-        }
-        
-        return $decodedResponse;
+
+        throw new Exception('Hugging Face API request failed after retries.');
     }
     
     /**

@@ -2,7 +2,7 @@
 session_start();
 require_once '../includes/data/db.php';
 require_once '../includes/functions/simple_auth.php';
-require_once '../includes/functions/otp.php';
+require_once '../includes/functions/otpv2.php';
 require_once '../config/recaptcha.php';
 
 $auth = new SimpleAuth();

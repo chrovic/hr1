@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/data/db.php';
-require_once __DIR__ . '/includes/functions/otp.php';
+require_once __DIR__ . '/includes/functions/otpv2.php';
 $db = getDB();
 if (!$db) { echo "DB fail\n"; exit(1);} 
 $stmt = $db->query("SELECT id, email FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1");

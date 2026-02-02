@@ -4,9 +4,9 @@ require_once __DIR__ . '/../../config/mailer.php';
 if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
     require_once __DIR__ . '/../../vendor/autoload.php';
 } else {
-    require_once __DIR__ . '/../library/PHPMailer/Exception.php';
-    require_once __DIR__ . '/../library/PHPMailer/PHPMailer.php';
-    require_once __DIR__ . '/../library/PHPMailer/SMTP.php';
+    require_once __DIR__ . '/./library/PHPMailer/Exception.php';
+    require_once __DIR__ . '/./library/PHPMailer/PHPMailer.php';
+    require_once __DIR__ . '/./library/PHPMailer/SMTP.php';
 }
 
 use PHPMailer\PHPMailer\PHPMailer;

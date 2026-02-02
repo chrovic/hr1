@@ -64,23 +64,6 @@ class OTPManager {
     public function generateOtp($userId, $email) {
         $this->lastError = '';
         $existing = $this->getOtpRow($userId);
-        if ($existing) {
-            $cooldownSeconds = 0;
-            $windowSeconds = 600;
-            $now = time();
-            $lastSent = $existing['last_sent_at'] ? strtotime($existing['last_sent_at']) : 0;
-            $resendCount = (int)($existing['resend_count'] ?? 0);
-
-            if ($lastSent && ($now - $lastSent) < $cooldownSeconds) {
-                return ['success' => false, 'message' => 'Please wait before requesting another OTP.'];
-            }
-            if ($lastSent && ($now - $lastSent) > $windowSeconds) {
-                $resendCount = 0;
-            }
-            if ($resendCount >= 3) {
-                return ['success' => false, 'message' => 'Resend limit reached. Please try again later.'];
-            }
-        }
 
         $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $hash = password_hash($code, PASSWORD_DEFAULT);

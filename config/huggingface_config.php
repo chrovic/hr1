@@ -3,7 +3,7 @@
 // This file contains configuration settings for Hugging Face AI integration
 
 // Hugging Face API Configuration
-define('HUGGINGFACE_API_KEY', getenv('HUGGINGFACE_API_KEY') ?: 'your_api_key_here');
+define('HUGGINGFACE_API_KEY', getenv('HUGGINGFACE_API_KEY') ?: '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');
 define('HUGGINGFACE_BASE_URL', 'https://router.huggingface.co/hf-inference/models/');
 
 // Model Configuration - Updated to more accurate models

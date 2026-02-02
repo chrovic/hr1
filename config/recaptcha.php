@@ -1,4 +1,4 @@
 <?php
 // reCAPTCHA toggle
-define('FORCE_RECAPTCHA', true);
+define('FORCE_RECAPTCHA', false);
 ?>

@@ -65,7 +65,7 @@ class OTPManager {
         $this->lastError = '';
         $existing = $this->getOtpRow($userId);
         if ($existing) {
-            $cooldownSeconds = 60;
+            $cooldownSeconds = 0;
             $windowSeconds = 600;
             $now = time();
             $lastSent = $existing['last_sent_at'] ? strtotime($existing['last_sent_at']) : 0;
